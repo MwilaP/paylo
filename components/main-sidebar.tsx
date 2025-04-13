@@ -10,9 +10,16 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { User as UserType } from "@/lib/auth-service"
+import { useAuth } from "@/lib/auth-context"
 
-export function MainSidebar() {
+interface MainSidebarProps {
+  user: UserType | null
+}
+
+export function MainSidebar({ user }: MainSidebarProps) {
   const pathname = usePathname()
+  const { logout } = useAuth()
 
   return (
     <div className="hidden border-r bg-background md:block md:w-64">
@@ -27,11 +34,11 @@ export function MainSidebar() {
           <div className="flex items-center gap-3 rounded-lg border p-3">
             <Avatar>
               <AvatarImage src="/placeholder.svg?height=40&width=40" alt="Avatar" />
-              <AvatarFallback>JD</AvatarFallback>
+              <AvatarFallback>{user?.name?.substring(0, 2) || 'U'}</AvatarFallback>
             </Avatar>
             <div className="flex flex-col">
-              <span className="text-sm font-medium">John Doe</span>
-              <span className="text-xs text-muted-foreground">Admin</span>
+              <span className="text-sm font-medium">{user?.name || 'User'}</span>
+              <span className="text-xs text-muted-foreground">{user?.role || 'Guest'}</span>
             </div>
           </div>
           <nav className="flex flex-col gap-1">
@@ -46,7 +53,14 @@ export function MainSidebar() {
           </nav>
           <div className="mt-auto">
             <NavItem href="/profile" icon={User} label="My Profile" isActive={pathname === "/profile"} />
-            <NavItem href="/login" icon={LogOut} label="Logout" isActive={false} />
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              onClick={() => logout()}
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </Button>
           </div>
         </div>
       </ScrollArea>

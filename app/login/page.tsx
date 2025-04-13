@@ -1,12 +1,74 @@
-import Link from "next/link"
-import { CreditCard } from "lucide-react"
+"use client"
 
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { CreditCard, Loader2 } from "lucide-react"
+
+import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function LoginPage() {
+  const router = useRouter()
+  const { login } = useAuth()
+  const { toast } = useToast()
+  
+  const [isLoading, setIsLoading] = useState(false)
+  const [formData, setFormData] = useState({
+    username: "",
+    password: "",
+  })
+  
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+  
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!formData.username || !formData.password) {
+      toast({
+        title: "Error",
+        description: "Please enter both username and password",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    setIsLoading(true)
+    
+    try {
+      const result = await login(formData.username, formData.password)
+      
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "You have been logged in successfully",
+        })
+        router.push("/dashboard")
+      } else {
+        toast({
+          title: "Authentication failed",
+          description: result.error || "Invalid credentials",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+  
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
       <Card className="mx-auto w-full max-w-md">
@@ -18,28 +80,52 @@ export default function LoginPage() {
             </div>
           </div>
           <CardTitle className="text-xl">Sign in to your account</CardTitle>
-          <CardDescription>Enter your email and password to access your account</CardDescription>
+          <CardDescription>Enter your username and password to access your account</CardDescription>
+          <CardDescription className="text-sm font-medium text-primary">
+            Test Account: username: testuser, password: securepass123
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" placeholder="name@example.com" />
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
-              <Link href="/reset-password" className="text-xs text-primary underline underline-offset-4">
-                Forgot password?
-              </Link>
+        <form onSubmit={handleSubmit}>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="username">Username or Email</Label>
+              <Input 
+                id="username" 
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                placeholder="Enter username or email" 
+              />
             </div>
-            <Input id="password" type="password" />
-          </div>
-        </CardContent>
-        <CardFooter className="flex flex-col space-y-4">
-          <Button asChild className="w-full">
-            <Link href="/dashboard">Sign in</Link>
-          </Button>
-        </CardFooter>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <Link href="/reset-password" className="text-xs text-primary underline underline-offset-4">
+                  Forgot password?
+                </Link>
+              </div>
+              <Input 
+                id="password" 
+                name="password"
+                type="password" 
+                value={formData.password}
+                onChange={handleChange}
+              />
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-col space-y-4">
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                "Sign in"
+              )}
+            </Button>
+          </CardFooter>
+        </form>
       </Card>
     </div>
   )

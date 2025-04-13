@@ -9,6 +9,7 @@ let employeesDb: any = null
 let payrollStructuresDb: any = null
 let payrollHistoryDb: any = null
 let settingsDb: any = null
+let usersDb: any = null // Added for user authentication
 
 // Database names
 export const DB_NAMES = {
@@ -16,6 +17,7 @@ export const DB_NAMES = {
   PAYROLL_STRUCTURES: "payroll_structures",
   PAYROLL_HISTORY: "payroll_history",
   SETTINGS: "payroll_settings",
+  USERS: "payroll_users", // Added for user authentication
 }
 
 // Flag to track initialization attempts
@@ -134,9 +136,10 @@ export const initializeDatabase = async () => {
     payrollStructuresDb = await createDatabase(DB_NAMES.PAYROLL_STRUCTURES)
     payrollHistoryDb = await createDatabase(DB_NAMES.PAYROLL_HISTORY)
     settingsDb = await createDatabase(DB_NAMES.SETTINGS)
+    usersDb = await createDatabase(DB_NAMES.USERS)
 
     // Check if all databases were created successfully
-    if (!employeesDb || !payrollStructuresDb || !payrollHistoryDb || !settingsDb) {
+    if (!employeesDb || !payrollStructuresDb || !payrollHistoryDb || !settingsDb || !usersDb) {
       console.error("Failed to create one or more databases")
       return {
         success: false,
@@ -145,6 +148,7 @@ export const initializeDatabase = async () => {
           payrollStructures: payrollStructuresDb,
           payrollHistory: payrollHistoryDb,
           settings: settingsDb,
+          users: usersDb,
         },
       }
     }
@@ -179,6 +183,15 @@ export const initializeDatabase = async () => {
               index: { fields: ["date", "employeeId"] },
             })
             .catch((err) => console.warn("Error creating payroll history index:", err))
+            
+        // Create indexes for users
+        if (usersDb) {
+          await usersDb
+            .createIndex({
+              index: { fields: ["username", "email"] },
+            })
+            .catch((err) => console.warn("Error creating users index:", err))
+        }
         }
 
         console.log("Database indexes created successfully")
@@ -199,6 +212,7 @@ export const initializeDatabase = async () => {
         payrollStructures: payrollStructuresDb,
         payrollHistory: payrollHistoryDb,
         settings: settingsDb,
+        users: usersDb,
       },
     }
   } catch (error) {
@@ -216,6 +230,7 @@ export const getDatabases = async () => {
       payrollStructures: null,
       payrollHistory: null,
       settings: null,
+      users: null,
     }
   }
 
@@ -231,6 +246,7 @@ export const getDatabases = async () => {
         payrollStructures: null,
         payrollHistory: null,
         settings: null,
+        users: null,
       }
     }
 
@@ -243,6 +259,7 @@ export const getDatabases = async () => {
     payrollStructures: payrollStructuresDb,
     payrollHistory: payrollHistoryDb,
     settings: settingsDb,
+    users: usersDb,
   }
 }
 
@@ -392,3 +409,53 @@ export const dbOperations = {
     }
   },
 }
+
+// Initialize the users database with a test user
+export const initializeTestUser = async () => {
+  try {
+    // Get the users database
+    const { users } = await getDatabases();
+    
+    if (!users) {
+      console.error("Users database not available");
+      return false;
+    }
+    
+    // Check if the test user already exists
+    const result = await dbOperations.find(users, {
+      selector: {
+        $or: [
+          { username: "testuser" },
+          { email: "testuser@example.com" }
+        ]
+      }
+    });
+    
+    if (result.docs && result.docs.length > 0) {
+      console.log("Test user already exists");
+      return true;
+    }
+    
+    // Create the test user
+    const testUser = {
+      username: "testuser",
+      email: "testuser@example.com",
+      password: "securepass123", // In a real app, this would be hashed
+      role: "admin",
+      name: "Test User",
+    };
+    
+    const created = await dbOperations.create(users, testUser);
+    
+    if (created) {
+      console.log("Test user created successfully");
+      return true;
+    } else {
+      console.error("Failed to create test user");
+      return false;
+    }
+  } catch (error) {
+    console.error("Error initializing test user:", error);
+    return false;
+  }
+};
