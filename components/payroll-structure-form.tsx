@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Minus, Plus, Save } from "lucide-react"
+import { Minus, Plus, Save, Loader2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,6 +14,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { PayrollStructureSummary } from "./payroll-structure-summary"
+import {
+  createPayrollStructure,
+  getPayrollStructure,
+  updatePayrollStructure,
+  PayrollStructureDocument
+} from "@/lib/services/payroll-structure-service"
+import { initializeDatabase } from "@/lib/db/db-service"
 
 interface Allowance {
   id: string
@@ -38,6 +45,8 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
   const router = useRouter()
   const { toast } = useToast()
   const isEditing = !!id
+  const [isLoading, setIsLoading] = useState(false)
+  const [dbInitialized, setDbInitialized] = useState(false)
 
   // Form state
   const [name, setName] = useState("")
@@ -51,54 +60,70 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
     { id: "1", name: "Tax", type: "percentage", value: 10, preTax: true },
   ])
 
+  // Initialize database
+  useEffect(() => {
+    const initDb = async () => {
+      try {
+        const { success } = await initializeDatabase();
+        setDbInitialized(success);
+        if (!success) {
+          toast({
+            title: "Database Error",
+            description: "Failed to initialize database. Some features may not work correctly.",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.error("Error initializing database:", error);
+        toast({
+          title: "Database Error",
+          description: "Failed to initialize database. Some features may not work correctly.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    initDb();
+  }, [toast]);
+
   // Load data if editing
   useEffect(() => {
-    if (isEditing) {
-      // Mock data for different structures
-      const structures: Record<string, any> = {
-        "1": {
-          name: "Standard Staff Payroll",
-          description: "Default structure for regular staff members",
-          frequency: "monthly",
-          basicSalary: 5000,
-          allowances: [
-            { id: "1", name: "Housing", type: "percentage", value: 20 },
-            { id: "2", name: "Transport", type: "fixed", value: 500 },
-          ],
-          deductions: [
-            { id: "1", name: "Tax", type: "percentage", value: 10, preTax: true },
-            { id: "2", name: "Pension", type: "percentage", value: 5, preTax: true },
-            { id: "3", name: "Health Insurance", type: "fixed", value: 200, preTax: false },
-          ],
-        },
-        "2": {
-          name: "Executive Package",
-          description: "Structure for executive team members",
-          frequency: "monthly",
-          basicSalary: 10000,
-          allowances: [
-            { id: "1", name: "Housing", type: "percentage", value: 25 },
-            { id: "2", name: "Transport", type: "fixed", value: 1000 },
-            { id: "3", name: "Entertainment", type: "fixed", value: 1500 },
-          ],
-          deductions: [
-            { id: "1", name: "Tax", type: "percentage", value: 15, preTax: true },
-            { id: "2", name: "Pension", type: "percentage", value: 7.5, preTax: true },
-          ],
-        },
-      }
+    if (isEditing && dbInitialized) {
+      const fetchPayrollStructure = async () => {
+        try {
+          setIsLoading(true);
+          const structure = await getPayrollStructure(id);
+          
+          if (structure) {
+            setName(structure.name);
+            setDescription(structure.description || "");
+            setFrequency(structure.frequency);
+            setBasicSalary(structure.basicSalary);
+            setAllowances(structure.allowances || []);
+            setDeductions(structure.deductions || []);
+          } else {
+            toast({
+              title: "Not Found",
+              description: "The requested payroll structure could not be found.",
+              variant: "destructive",
+            });
+            router.push("/payroll/structures");
+          }
+        } catch (error) {
+          console.error("Error fetching payroll structure:", error);
+          toast({
+            title: "Error",
+            description: "Failed to load payroll structure data.",
+            variant: "destructive",
+          });
+        } finally {
+          setIsLoading(false);
+        }
+      };
 
-      const structure = structures[id as keyof typeof structures]
-      if (structure) {
-        setName(structure.name)
-        setDescription(structure.description)
-        setFrequency(structure.frequency)
-        setBasicSalary(structure.basicSalary)
-        setAllowances(structure.allowances)
-        setDeductions(structure.deductions)
-      }
+      fetchPayrollStructure();
     }
-  }, [isEditing, id])
+  }, [isEditing, id, dbInitialized, router, toast]);
 
   // Handlers for allowances
   const addAllowance = () => {
@@ -129,15 +154,103 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
   }
 
   // Handle form submission
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    toast({
-      title: isEditing ? "Structure updated" : "Structure created",
-      description: isEditing
-        ? "The payroll structure has been updated successfully."
-        : "The payroll structure has been created successfully.",
-    })
-    router.push("/payroll/structures")
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validate form
+    if (!name.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Structure name is required.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (basicSalary <= 0) {
+      toast({
+        title: "Validation Error",
+        description: "Basic salary must be greater than zero.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate allowances
+    const invalidAllowance = allowances.find(a => !a.name.trim() || a.value < 0);
+    if (invalidAllowance) {
+      toast({
+        title: "Validation Error",
+        description: "All allowances must have a name and a non-negative value.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate deductions
+    const invalidDeduction = deductions.find(d => !d.name.trim() || d.value < 0);
+    if (invalidDeduction) {
+      toast({
+        title: "Validation Error",
+        description: "All deductions must have a name and a non-negative value.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      
+      const payrollStructureData = {
+        name,
+        description,
+        frequency,
+        basicSalary,
+        allowances,
+        deductions
+      };
+      
+      if (isEditing) {
+        // Update existing structure
+        await updatePayrollStructure(id, payrollStructureData);
+        toast({
+          title: "Structure updated",
+          description: "The payroll structure has been updated successfully.",
+        });
+      } else {
+        // Create new structure
+        const result = await createPayrollStructure(payrollStructureData);
+        if (!result) {
+          throw new Error("Failed to create payroll structure");
+        }
+        toast({
+          title: "Structure created",
+          description: "The payroll structure has been created successfully.",
+        });
+      }
+      
+      router.push("/payroll/structures");
+    } catch (error) {
+      console.error("Error saving payroll structure:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save payroll structure. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading && isEditing) {
+    return (
+      <div className="flex h-[400px] w-full items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+          <p className="mt-2 text-sm text-muted-foreground">Loading payroll structure...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -398,9 +511,18 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
             <Button type="button" variant="outline" onClick={() => router.push("/payroll/structures")}>
               Cancel
             </Button>
-            <Button type="submit">
-              <Save className="mr-2 h-4 w-4" />
-              {isEditing ? "Update Structure" : "Create Structure"}
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {isEditing ? "Updating..." : "Creating..."}
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  {isEditing ? "Update Structure" : "Create Structure"}
+                </>
+              )}
             </Button>
           </div>
         </form>
