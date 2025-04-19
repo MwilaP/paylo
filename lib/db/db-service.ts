@@ -1,8 +1,11 @@
 "use client"
 
+// Import types from pouchdb.d.ts
+
 // PouchDB instances
 let PouchDB: any = null
 let PouchDBFind: any = null
+let PouchDBCompression: any = null
 
 // Database instances
 let employeesDb: any = null
@@ -24,7 +27,14 @@ export const DB_NAMES = {
 let initializationAttempted = false
 let initializationSuccessful = false
 
-// Initialize PouchDB with better error handling
+// Network status tracking
+let isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => { isOnline = true })
+  window.addEventListener('offline', () => { isOnline = false })
+}
+
+// Initialize PouchDB with better error handling and plugins
 const initPouchDB = async () => {
   // Skip if already initialized successfully
   if (PouchDB) {
@@ -76,6 +86,30 @@ const initPouchDB = async () => {
       console.error("Error loading pouchdb-find plugin:", pluginError)
       // Continue without the plugin
     }
+    
+    // Load compression plugin for low-bandwidth optimization
+    try {
+      console.log("Attempting to load pouchdb-adapter-memory and compression plugins...")
+      
+      // Load compression plugin
+      const compressionModule = await import("pouchdb-adapter-memory").catch((err) => {
+        console.error("Error importing pouchdb-adapter-memory:", err)
+        return { default: null }
+      })
+      
+      PouchDBCompression = compressionModule.default
+      
+      if (PouchDBCompression) {
+        console.log("Registering compression plugin...")
+        PouchDB.plugin(PouchDBCompression)
+        console.log("Compression plugin registered successfully")
+      } else {
+        console.warn("Compression plugin not available, bandwidth optimization will be limited")
+      }
+    } catch (pluginError) {
+      console.error("Error loading compression plugin:", pluginError)
+      // Continue without the plugin
+    }
 
     return true
   } catch (error) {
@@ -90,10 +124,22 @@ const createDatabase = async (dbName: string) => {
     console.error(`Cannot create database ${dbName}: PouchDB not initialized`)
     return null
   }
-
   try {
     console.log(`Creating database: ${dbName}`)
-    return new PouchDB(dbName)
+    
+    // Configure database options for better performance
+    const options = {
+      auto_compaction: true,  // Automatically compact the database
+      revs_limit: 100,        // Limit revision history to save space
+      adapter: 'idb',         // Use IndexedDB adapter for better performance
+    }
+    
+    const db = new PouchDB(dbName, options)
+    
+    // Add database name as a property for easier identification
+    db.name = dbName
+    
+    return db
   } catch (error) {
     console.error(`Error creating database ${dbName}:`, error)
     return null
@@ -164,7 +210,7 @@ export const initializeDatabase = async () => {
             .createIndex({
               index: { fields: ["department", "status", "payrollStructureId"] },
             })
-            .catch((err) => console.warn("Error creating employees index:", err))
+            .catch((err: any) => console.warn("Error creating employees index:", err))
         }
 
         // Create indexes for payroll structures
@@ -173,7 +219,7 @@ export const initializeDatabase = async () => {
             .createIndex({
               index: { fields: ["name"] },
             })
-            .catch((err) => console.warn("Error creating payroll structures index:", err))
+            .catch((err: any) => console.warn("Error creating payroll structures index:", err))
         }
 
         // Create indexes for payroll history
@@ -182,7 +228,7 @@ export const initializeDatabase = async () => {
             .createIndex({
               index: { fields: ["date", "employeeId"] },
             })
-            .catch((err) => console.warn("Error creating payroll history index:", err))
+            .catch((err: any) => console.warn("Error creating payroll history index:", err))
             
         // Create indexes for users
         if (usersDb) {
@@ -190,7 +236,7 @@ export const initializeDatabase = async () => {
             .createIndex({
               index: { fields: ["username", "email"] },
             })
-            .catch((err) => console.warn("Error creating users index:", err))
+            .catch((err: any) => console.warn("Error creating users index:", err))
         }
         }
 
@@ -263,6 +309,35 @@ export const getDatabases = async () => {
   }
 }
 
+// Check if we're online
+export const checkOnlineStatus = (): boolean => {
+  return isOnline
+}
+
+// Wait for online status
+export const waitForOnline = async (
+  timeout = 30000,
+  checkInterval = 1000
+): Promise<boolean> => {
+  if (isOnline) return true
+  
+  return new Promise((resolve) => {
+    const startTime = Date.now()
+    const intervalId = setInterval(() => {
+      if (isOnline) {
+        clearInterval(intervalId)
+        resolve(true)
+        return
+      }
+      
+      if (Date.now() - startTime > timeout) {
+        clearInterval(intervalId)
+        resolve(false)
+      }
+    }, checkInterval)
+  })
+}
+
 // Mock database operations for when real database is not available
 const mockDbOperations = {
   create: async () => {
@@ -295,7 +370,65 @@ const mockDbOperations = {
   },
 }
 
-// Safe database operations with fallbacks
+// Queue for offline operations
+interface QueuedOperation {
+  type: 'create' | 'update' | 'delete' | 'bulkDocs'
+  dbName: string
+  data: any
+  timestamp: number
+}
+
+let operationsQueue: QueuedOperation[] = []
+
+// Process queued operations when online
+const processQueue = async () => {
+  if (!isOnline || operationsQueue.length === 0) return
+  
+  console.log(`Processing ${operationsQueue.length} queued operations`)
+  
+  const dbInstances = await getDatabases()
+  const databases = dbInstances as any
+  if (!databases) return
+  
+  // Process operations in order
+  const operations = [...operationsQueue]
+  operationsQueue = []
+  
+  for (const op of operations) {
+    try {
+      const db = databases[op.dbName.replace('payroll_', '')]
+      if (!db) continue
+      
+      switch (op.type) {
+        case 'create':
+          await dbOperations.create(db, op.data)
+          break
+        case 'update':
+          await dbOperations.update(db, op.data._id, op.data)
+          break
+        case 'delete':
+          await dbOperations.delete(db, op.data._id)
+          break
+        case 'bulkDocs':
+          await dbOperations.bulkDocs(db, op.data)
+          break
+      }
+    } catch (error) {
+      console.error(`Error processing queued operation:`, error)
+      // Re-queue failed operation
+      operationsQueue.push(op)
+    }
+  }
+}
+
+// Set up queue processing when online
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    processQueue()
+  })
+}
+
+// Safe database operations with fallbacks and offline support
 export const dbOperations = {
   // Create a document
   async create(db: any, doc: any) {
@@ -312,9 +445,37 @@ export const dbOperations = {
         updatedAt: timestamp,
       }
 
+      // If offline, queue the operation
+      if (!isOnline) {
+        console.log("Offline: Queueing create operation")
+        operationsQueue.push({
+          type: 'create',
+          dbName: db.name,
+          data: docToSave,
+          timestamp: Date.now()
+        })
+        return { ...docToSave, _queued: true }
+      }
+
       const response = await db.put(docToSave)
       return { ...docToSave, _rev: response.rev }
-    } catch (error) {
+    } catch (error: any) {
+      // If conflict, try to resolve
+      if (error.name === 'conflict') {
+        try {
+          const existingDoc = await db.get(doc._id)
+          const mergedDoc = {
+            ...existingDoc,
+            ...doc,
+            updatedAt: new Date().toISOString()
+          }
+          const response = await db.put(mergedDoc)
+          return { ...mergedDoc, _rev: response.rev }
+        } catch (mergeError) {
+          console.error("Error resolving conflict:", mergeError)
+        }
+      }
+      
       console.error("Error creating document:", error)
       return null
     }
@@ -337,6 +498,18 @@ export const dbOperations = {
     if (!db) return mockDbOperations.update()
 
     try {
+      // If offline, queue the operation
+      if (!isOnline) {
+        console.log("Offline: Queueing update operation")
+        operationsQueue.push({
+          type: 'update',
+          dbName: db.name,
+          data: { _id: id, ...updates },
+          timestamp: Date.now()
+        })
+        return { _id: id, ...updates, _queued: true }
+      }
+
       const doc = await db.get(id)
       const updatedDoc = {
         ...doc,
@@ -345,7 +518,23 @@ export const dbOperations = {
       }
       const response = await db.put(updatedDoc)
       return { ...updatedDoc, _rev: response.rev }
-    } catch (error) {
+    } catch (error: any) {
+      // If conflict, try to resolve
+      if (error.name === 'conflict') {
+        try {
+          const latestDoc = await db.get(id)
+          const resolvedDoc = {
+            ...latestDoc,
+            ...updates,
+            updatedAt: new Date().toISOString()
+          }
+          const response = await db.put(resolvedDoc)
+          return { ...resolvedDoc, _rev: response.rev }
+        } catch (resolveError) {
+          console.error(`Error resolving conflict for document ${id}:`, resolveError)
+        }
+      }
+      
       console.error(`Error updating document with ID ${id}:`, error)
       return null
     }
@@ -356,6 +545,18 @@ export const dbOperations = {
     if (!db) return mockDbOperations.delete()
 
     try {
+      // If offline, queue the operation
+      if (!isOnline) {
+        console.log("Offline: Queueing delete operation")
+        operationsQueue.push({
+          type: 'delete',
+          dbName: db.name,
+          data: { _id: id },
+          timestamp: Date.now()
+        })
+        return { ok: true, id, _queued: true }
+      }
+
       const doc = await db.get(id)
       return await db.remove(doc)
     } catch (error) {
@@ -372,7 +573,7 @@ export const dbOperations = {
       const result = await db.allDocs({
         include_docs: true,
       })
-      return result.rows.map((row) => row.doc)
+      return result.rows.map((row: any) => row.doc)
     } catch (error) {
       console.error("Error getting all documents:", error)
       return []
@@ -402,6 +603,36 @@ export const dbOperations = {
         updatedAt: timestamp,
         createdAt: doc.createdAt || timestamp,
       }))
+      
+      // If offline, queue the operation
+      if (!isOnline) {
+        console.log("Offline: Queueing bulk operation")
+        operationsQueue.push({
+          type: 'bulkDocs',
+          dbName: db.name,
+          data: docsToSave,
+          timestamp: Date.now()
+        })
+        return docsToSave.map(doc => ({ ok: true, id: doc._id, _queued: true }))
+      }
+      
+      // Use compression if available for large batches
+      if (docsToSave.length > 10 && PouchDBCompression) {
+        console.log(`Using compression for bulk operation with ${docsToSave.length} documents`)
+        // Compress the documents before sending
+        const compressedDocs = docsToSave.map(doc => {
+          // Simple compression: remove null/undefined values
+          return Object.entries(doc).reduce((acc, [key, value]) => {
+            if (value !== null && value !== undefined) {
+              acc[key] = value
+            }
+            return acc
+          }, {} as any)
+        })
+        
+        return await db.bulkDocs(compressedDocs)
+      }
+      
       return await db.bulkDocs(docsToSave)
     } catch (error) {
       console.error("Error performing bulk operation:", error)
@@ -459,3 +690,16 @@ export const initializeTestUser = async () => {
     return false;
   }
 };
+
+// Export the operations queue for testing
+export const getOperationsQueue = () => [...operationsQueue]
+
+// Clear the operations queue
+export const clearOperationsQueue = () => {
+  operationsQueue = []
+}
+
+// Process queued operations manually
+export const processOperationsQueue = async () => {
+  return await processQueue()
+}

@@ -50,7 +50,7 @@ export default function DashboardPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$0</div>
+            <div className="text-2xl font-bold">K0</div>
             <p className="text-xs text-muted-foreground">No payroll processed yet</p>
           </CardContent>
         </Card>

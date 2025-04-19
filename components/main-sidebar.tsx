@@ -26,7 +26,7 @@ export function MainSidebar({ user }: MainSidebarProps) {
       <div className="flex h-16 items-center border-b px-4">
         <Link href="/" className="flex items-center gap-2 font-bold text-xl">
           <CreditCard className="h-6 w-6 text-primary" />
-          <span>Paylo</span>
+          <span>Payroll</span>
         </Link>
       </div>
       <ScrollArea className="h-[calc(100vh-4rem)]">

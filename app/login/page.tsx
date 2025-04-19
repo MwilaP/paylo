@@ -76,7 +76,7 @@ export default function LoginPage() {
           <div className="flex justify-center">
             <div className="flex items-center gap-2 text-2xl font-bold">
               <CreditCard className="h-8 w-8 text-primary" />
-              <span>Paylo</span>
+              <span>Payroll</span>
             </div>
           </div>
           <CardTitle className="text-xl">Sign in to your account</CardTitle>

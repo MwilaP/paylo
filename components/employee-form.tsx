@@ -438,7 +438,7 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
                   <SelectTrigger id="department">
                     <SelectValue placeholder="Select department" />
                   </SelectTrigger>
-                  <SelectContent>
+                  {/* <SelectContent>
                     <SelectItem value="engineering">Engineering</SelectItem>
                     <SelectItem value="marketing">Marketing</SelectItem>
                     <SelectItem value="finance">Finance</SelectItem>
@@ -447,7 +447,7 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
                     <SelectItem value="design">Design</SelectItem>
                     <SelectItem value="sales">Sales</SelectItem>
                     <SelectItem value="support">Support</SelectItem>
-                  </SelectContent>
+                  </SelectContent> */}
                 </Select>
               </div>
 
@@ -505,20 +505,22 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
                 </Popover>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="reportingTo">Reporting To</Label>
-                <Select value={formData.reportingTo} onValueChange={(value) => handleInputChange("reportingTo", value)}>
-                  <SelectTrigger id="reportingTo">
-                    <SelectValue placeholder="Select manager" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="john-doe">John Doe (CEO)</SelectItem>
-                    <SelectItem value="jane-smith">Jane Smith (CTO)</SelectItem>
-                    <SelectItem value="robert-johnson">Robert Johnson (CFO)</SelectItem>
-                    <SelectItem value="emily-davis">Emily Davis (HR Director)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {
+              //   <div className="space-y-2">
+              //   <Label htmlFor="reportingTo">Reporting To</Label>
+              //   <Select value={formData.reportingTo} onValueChange={(value) => handleInputChange("reportingTo", value)}>
+              //     <SelectTrigger id="reportingTo">
+              //       <SelectValue placeholder="Select manager" />
+              //     </SelectTrigger>
+              //     <SelectContent>
+              //       <SelectItem value="john-doe">John Doe (CEO)</SelectItem>
+              //       <SelectItem value="jane-smith">Jane Smith (CTO)</SelectItem>
+              //       <SelectItem value="robert-johnson">Robert Johnson (CFO)</SelectItem>
+              //       <SelectItem value="emily-davis">Emily Davis (HR Director)</SelectItem>
+              //     </SelectContent>
+              //   </Select>
+              // </div>
+              }
 
               <div className="space-y-2">
                 <Label htmlFor="workLocation">Work Location</Label>
@@ -702,7 +704,7 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
 
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">Basic Salary:</span>
-                        <span className="text-sm font-medium">${selectedStructure.basicSalary.toLocaleString()}</span>
+                        <span className="text-sm font-medium">K{selectedStructure.basicSalary.toLocaleString()}</span>
                       </div>
 
                       {selectedStructure.allowances.length > 0 && (
@@ -714,8 +716,8 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
                                 <span>{allowance.name}</span>
                                 <span>
                                   {allowance.type === "fixed"
-                                    ? `$${allowance.value.toLocaleString()}`
-                                    : `${allowance.value}%`}
+                                    ? `K${allowance.value.toLocaleString()}`
+                                    : `K${ (selectedStructure.basicSalary * ( allowance.value / 100))}`}
                                 </span>
                               </li>
                             ))}
@@ -732,8 +734,8 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
                                 <span>{deduction.name}</span>
                                 <span>
                                   {deduction.type === "fixed"
-                                    ? `$${deduction.value.toLocaleString()}`
-                                    : `${deduction.value}%`}
+                                    ? `K${deduction.value.toLocaleString()}`
+                                    : `K${ (selectedStructure.basicSalary * ( deduction.value / 100))}`}
                                 </span>
                               </li>
                             ))}
@@ -751,18 +753,18 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
                             <div className="flex justify-between border-t pt-2 mt-2">
                               <span className="text-sm font-medium">Total Allowances:</span>
                               <span className="text-sm font-medium">
-                                ${salaryDetails.totalAllowances.toLocaleString()}
+                                K{salaryDetails.totalAllowances.toLocaleString()}
                               </span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-sm font-medium">Total Deductions:</span>
                               <span className="text-sm font-medium">
-                                ${salaryDetails.totalDeductions.toLocaleString()}
+                                K{salaryDetails.totalDeductions.toLocaleString()}
                               </span>
                             </div>
                             <div className="flex justify-between border-t pt-2 mt-2">
                               <span className="text-sm font-medium">Net Salary:</span>
-                              <span className="text-sm font-medium">${salaryDetails.netSalary.toLocaleString()}</span>
+                              <span className="text-sm font-medium">K{salaryDetails.netSalary.toLocaleString()}</span>
                             </div>
                           </>
                         )

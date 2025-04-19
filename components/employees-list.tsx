@@ -7,40 +7,78 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { MoreHorizontal, Plus, UserPlus } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { EmployeeFilters } from "./employee-filters"
 import { useDatabase } from "@/lib/db/db-context"
+import { Employee } from "@/lib/db/employee-service"
+import { EmployeeFilters } from "./employee-filters"
 
 export function EmployeesList() {
   const router = useRouter()
-  const { employeeService, isLoading } = useDatabase()
-  const [employees, setEmployees] = useState<any[]>([])
-  const [filteredEmployees, setFilteredEmployees] = useState<any[]>([])
+  const { employeeService, isLoading: dbLoading } = useDatabase()
+  const [employees, setEmployees] = useState<Employee[]>([])
+  const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState({
     department: "all",
     status: "all",
     search: "",
   })
 
-  useEffect(() => {
-    const loadEmployees = async () => {
-      if (!employeeService) return
-
-      try {
-        const data = await employeeService.getAllEmployees()
-        setEmployees(data)
-        setFilteredEmployees(data)
-      } catch (error) {
-        console.error("Error loading employees:", error)
-        setEmployees([])
-        setFilteredEmployees([])
-      }
+  // Function to load employees data
+  const loadEmployees = async () => {
+    if (!employeeService) {
+      setIsLoading(false)
+      setError("Employee service not available")
+      return
     }
 
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      // Add retry logic with exponential backoff
+      const maxRetries = 3
+      let retryCount = 0
+      let success = false
+      let data: Employee[] = []
+
+      while (!success && retryCount < maxRetries) {
+        try {
+          data = await employeeService.getAllEmployees()
+          success = true
+        } catch (err) {
+          retryCount++
+          if (retryCount >= maxRetries) throw err
+          
+          // Exponential backoff
+          const delay = Math.pow(2, retryCount) * 1000
+          console.log(`Retry ${retryCount}/${maxRetries} after ${delay}ms`)
+          await new Promise(resolve => setTimeout(resolve, delay))
+        }
+      }
+
+      setEmployees(data)
+      setFilteredEmployees(data)
+      setIsLoading(false)
+    } catch (error) {
+      console.error("Error loading employees:", error)
+      setError("Failed to load employees. Please try again.")
+      setEmployees([])
+      setFilteredEmployees([])
+      setIsLoading(false)
+    }
+  }
+
+  // Load employees on component mount or when employeeService changes
+  useEffect(() => {
     loadEmployees()
   }, [employeeService])
 
+  // Filter employees when filters or employees change
   useEffect(() => {
     if (!employees.length) {
       setFilteredEmployees([])
@@ -64,7 +102,7 @@ export function EmployeesList() {
       const searchLower = filters.search.toLowerCase()
       result = result.filter(
         (employee) =>
-          `${employee.firstName} ${employee.lastName}`.toLowerCase().includes(searchLower) ||
+          `${employee.firstName || ""} ${employee.lastName || ""}`.toLowerCase().includes(searchLower) ||
           employee.email?.toLowerCase().includes(searchLower) ||
           employee.designation?.toLowerCase().includes(searchLower),
       )
@@ -132,8 +170,20 @@ export function EmployeesList() {
       <CardContent>
         <EmployeeFilters onFilterChange={handleFilterChange} />
 
-        {isLoading ? (
+        {dbLoading || isLoading ? (
           <LoadingState />
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-6 space-y-4">
+            <div className="flex items-center text-red-500">
+              <span className="font-medium">{error}</span>
+            </div>
+            <Button 
+              variant="outline" 
+              onClick={() => loadEmployees()}
+            >
+              Try Again
+            </Button>
+          </div>
         ) : employees.length === 0 ? (
           <EmptyState />
         ) : filteredEmployees.length === 0 ? (

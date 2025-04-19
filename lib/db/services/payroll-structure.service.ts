@@ -91,6 +91,18 @@ export const payrollStructureService = (db: any) => ({
     }
   },
 
+  // Calculate salary details (compatibility with mock service)
+  calculateSalaryDetails(structure: any) {
+    const result = this.calculateNetSalary(structure)
+    return {
+      basicSalary: result.basicSalary,
+      totalAllowances: result.grossSalary - result.basicSalary,
+      totalDeductions: result.totalDeductions,
+      grossSalary: result.grossSalary,
+      netSalary: result.netSalary,
+    }
+  },
+
   // Calculate net salary based on structure and basic salary
   calculateNetSalary(structure: any, basicSalary = 0) {
     if (!structure) {
