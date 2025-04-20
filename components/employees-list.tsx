@@ -14,12 +14,18 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useDatabase } from "@/lib/db/db-context"
 import { Employee } from "@/lib/db/employee-service"
 import { EmployeeFilters } from "./employee-filters"
+import { getEmployeeService, getPayrollStructureService } from "@/lib/db/services/service-factory"
+import { useToast } from "@/hooks/use-toast"
+
 
 export function EmployeesList() {
   const router = useRouter()
-  const { employeeService, isLoading: dbLoading } = useDatabase()
+  const { isLoading: dbLoading } = useDatabase()
+  const [employeeService, setEmployeeService] = useState<any>(null)
   const [employees, setEmployees] = useState<Employee[]>([])
   const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([])
+  const [servicesLoaded, setServicesLoaded] = useState(false)
+  const [serviceError, setServiceError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState({
@@ -27,11 +33,48 @@ export function EmployeesList() {
     status: "all",
     search: "",
   })
+  const { toast } = useToast()
 
   // Function to load employees data
+  // Initialize services
+  useEffect(() => {
+    const initServices = async () => {
+      try {
+        console.log("Initializing services...")
+        setServiceError(null)
+
+        const empService = await getEmployeeService()
+        // const payrollService = await getPayrollStructureService()
+
+        setEmployeeService(empService)
+        console.log(" employee services ", empService)
+        //setPayrollStructureService(payrollService)
+        setServicesLoaded(true)
+        console.log("Services initialized successfully")
+      } catch (error) {
+        console.error("Error initializing services:", error)
+        setServiceError("Failed to initialize services. The application will run with limited functionality.")
+
+        // Set services to empty implementations to avoid null errors
+        setEmployeeService({})
+        //setPayrollStructureService({})
+        setServicesLoaded(true)
+
+        toast({
+          title: "Warning",
+          description: "Running in limited functionality mode due to database initialization issues.",
+          variant: "destructive",
+        })
+      }
+    }
+
+    initServices()
+  }, [toast])
   const loadEmployees = async () => {
+    console.log("fetching employees")
     if (!employeeService) {
       setIsLoading(false)
+      console.log("Employee service not available")
       setError("Employee service not available")
       return
     }
@@ -53,7 +96,6 @@ export function EmployeesList() {
         } catch (err) {
           retryCount++
           if (retryCount >= maxRetries) throw err
-          
           // Exponential backoff
           const delay = Math.pow(2, retryCount) * 1000
           console.log(`Retry ${retryCount}/${maxRetries} after ${delay}ms`)
@@ -62,6 +104,7 @@ export function EmployeesList() {
       }
 
       setEmployees(data)
+      console.log("employees", data)
       setFilteredEmployees(data)
       setIsLoading(false)
     } catch (error) {
@@ -73,8 +116,12 @@ export function EmployeesList() {
     }
   }
 
+
+
   // Load employees on component mount or when employeeService changes
   useEffect(() => {
+
+
     loadEmployees()
   }, [employeeService])
 
@@ -170,15 +217,15 @@ export function EmployeesList() {
       <CardContent>
         <EmployeeFilters onFilterChange={handleFilterChange} />
 
-        {dbLoading || isLoading ? (
+        {isLoading ? (
           <LoadingState />
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-6 space-y-4">
             <div className="flex items-center text-red-500">
               <span className="font-medium">{error}</span>
             </div>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => loadEmployees()}
             >
               Try Again
@@ -255,3 +302,11 @@ export function EmployeesList() {
     </Card>
   )
 }
+function setServicesLoaded(arg0: boolean) {
+  throw new Error("Function not implemented.")
+}
+
+function setServiceError(arg0: string) {
+  throw new Error("Function not implemented.")
+}
+

@@ -26,6 +26,9 @@ export const DB_NAMES = {
 // Flag to track initialization attempts
 let initializationAttempted = false
 let initializationSuccessful = false
+let lastInitializationError: string | null = null
+let lastHealthCheckTime: number | null = null
+let healthCheckInterval: NodeJS.Timeout | null = null
 
 // Network status tracking
 let isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
@@ -49,17 +52,22 @@ const initPouchDB = async () => {
 
   try {
     console.log("Attempting to load PouchDB...")
+    lastInitializationError = null
 
     // Use dynamic import with explicit error handling
     const pouchModule = await import("pouchdb").catch((err) => {
-      console.error("Error importing PouchDB:", err)
+      const errorMsg = `Error importing PouchDB: ${err.message}`
+      console.error(errorMsg)
+      lastInitializationError = errorMsg
       return { default: null }
     })
 
     PouchDB = pouchModule.default
 
     if (!PouchDB) {
-      console.error("Failed to load PouchDB module")
+      const errorMsg = "Failed to load PouchDB module - check network connection and dependencies"
+      console.error(errorMsg)
+      lastInitializationError = errorMsg
       return false
     }
 
@@ -147,35 +155,74 @@ const createDatabase = async (dbName: string) => {
 }
 
 // Initialize all databases
+// Health check function
+const performHealthCheck = async () => {
+  try {
+    if (!PouchDB || !employeesDb) return false
+    
+    // Simple test query to verify database is responsive
+    const info = await employeesDb.info().catch(() => null)
+    lastHealthCheckTime = Date.now()
+    return !!info
+  } catch (error) {
+    console.error("Health check failed:", error)
+    return false
+  }
+}
+
+// Start periodic health checks
+const startHealthChecks = (interval = 30000) => {
+  if (healthCheckInterval) clearInterval(healthCheckInterval)
+  
+  healthCheckInterval = setInterval(async () => {
+    const isHealthy = await performHealthCheck()
+    if (!isHealthy) {
+      console.warn("Database health check failed")
+    }
+  }, interval)
+}
+
 export const initializeDatabase = async () => {
   // Skip if already attempted
   if (initializationAttempted) {
+    const isHealthy = await performHealthCheck()
     return {
-      success: initializationSuccessful,
+      success: initializationSuccessful && isHealthy,
       databases: {
         employees: employeesDb,
         payrollStructures: payrollStructuresDb,
         payrollHistory: payrollHistoryDb,
         settings: settingsDb,
+        users: usersDb,
       },
+      lastError: lastInitializationError,
+      lastHealthCheck: lastHealthCheckTime,
     }
   }
 
   initializationAttempted = true
+  lastInitializationError = null
 
   // Skip if not in browser
   if (typeof window === "undefined") {
-    console.log("Skipping database initialization in server environment")
-    return { success: false, databases: null }
+    const errorMsg = "Skipping database initialization in server environment"
+    console.log(errorMsg)
+    lastInitializationError = errorMsg
+    return { success: false, databases: null, lastError: errorMsg }
   }
 
   try {
     // Initialize PouchDB
     const pouchInitialized = await initPouchDB()
     if (!pouchInitialized) {
-      console.error("Failed to initialize PouchDB, cannot proceed with database initialization")
-      return { success: false, databases: null }
+      const errorMsg = "Failed to initialize PouchDB, cannot proceed with database initialization"
+      console.error(errorMsg)
+      lastInitializationError = errorMsg
+      return { success: false, databases: null, lastError: errorMsg }
     }
+
+    // Start health monitoring
+    startHealthChecks()
 
     // Create database instances
     employeesDb = await createDatabase(DB_NAMES.EMPLOYEES)
@@ -314,25 +361,50 @@ export const checkOnlineStatus = (): boolean => {
   return isOnline
 }
 
-// Wait for online status
+// Wait for online status with enhanced logging and error handling
 export const waitForOnline = async (
   timeout = 30000,
   checkInterval = 1000
-): Promise<boolean> => {
-  if (isOnline) return true
+): Promise<{ online: boolean; waitedMs?: number }> => {
+  if (isOnline) {
+    console.debug("Already online, no waiting needed")
+    return { online: true, waitedMs: 0 }
+  }
+  
+  console.log(`Waiting for online status (timeout: ${timeout}ms)...`)
+  const startTime = Date.now()
   
   return new Promise((resolve) => {
-    const startTime = Date.now()
-    const intervalId = setInterval(() => {
-      if (isOnline) {
-        clearInterval(intervalId)
-        resolve(true)
-        return
-      }
-      
-      if (Date.now() - startTime > timeout) {
-        clearInterval(intervalId)
-        resolve(false)
+    const intervalId = setInterval(async () => {
+      try {
+        // Perform a lightweight network check
+        const networkCheck = await fetch('https://httpbin.org/get', {
+          method: 'HEAD',
+          cache: 'no-store',
+          mode: 'no-cors'
+        }).catch(() => null)
+        
+        if (networkCheck?.ok) {
+          const waitedMs = Date.now() - startTime
+          console.log(`Online status confirmed after ${waitedMs}ms`)
+          clearInterval(intervalId)
+          resolve({ online: true, waitedMs })
+          return
+        }
+        
+        if (Date.now() - startTime > timeout) {
+          const waitedMs = Date.now() - startTime
+          console.warn(`Online wait timeout after ${waitedMs}ms`)
+          clearInterval(intervalId)
+          resolve({ online: false, waitedMs })
+        }
+      } catch (error) {
+        console.error("Error during online status check:", error)
+        // Continue waiting unless timeout
+        if (Date.now() - startTime > timeout) {
+          clearInterval(intervalId)
+          resolve({ online: false, waitedMs: timeout })
+        }
       }
     }, checkInterval)
   })
@@ -432,7 +504,10 @@ if (typeof window !== 'undefined') {
 export const dbOperations = {
   // Create a document
   async create(db: any, doc: any) {
-    if (!db) return mockDbOperations.create()
+    if (!db) {
+      console.warn("Using mock database operation: create")
+      return mockDbOperations.create()
+    }
 
     try {
       const timestamp = new Date().toISOString()
@@ -447,37 +522,61 @@ export const dbOperations = {
 
       // If offline, queue the operation
       if (!isOnline) {
-        console.log("Offline: Queueing create operation")
+        console.log("Offline: Queueing create operation for", docToSave._id)
         operationsQueue.push({
           type: 'create',
           dbName: db.name,
           data: docToSave,
           timestamp: Date.now()
         })
-        return { ...docToSave, _queued: true }
+        return { ...docToSave, _queued: true, _offline: true }
       }
 
+      // Log operation details
+      console.debug("Creating document:", {
+        db: db.name,
+        id: docToSave._id,
+        type: docToSave.type || 'unknown'
+      })
+
       const response = await db.put(docToSave)
+      
+      console.debug("Document created successfully:", {
+        id: docToSave._id,
+        rev: response.rev
+      })
+      
       return { ...docToSave, _rev: response.rev }
     } catch (error: any) {
       // If conflict, try to resolve
       if (error.name === 'conflict') {
+        console.warn("Document conflict detected, attempting merge:", doc._id)
         try {
           const existingDoc = await db.get(doc._id)
+          console.debug("Merging with existing document:", existingDoc._rev)
+          
           const mergedDoc = {
             ...existingDoc,
             ...doc,
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
+            _conflictResolved: true
           }
+          
           const response = await db.put(mergedDoc)
+          console.debug("Conflict resolved successfully:", response.rev)
           return { ...mergedDoc, _rev: response.rev }
         } catch (mergeError) {
           console.error("Error resolving conflict:", mergeError)
+          throw new Error(`Failed to resolve conflict for document ${doc._id}`)
         }
       }
       
-      console.error("Error creating document:", error)
-      return null
+      console.error("Error creating document:", {
+        id: doc._id,
+        error: error.message,
+        stack: error.stack
+      })
+      throw error
     }
   },
 

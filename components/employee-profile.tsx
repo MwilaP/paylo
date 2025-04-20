@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
+import { useDatabase } from "@/lib/db/db-context" // Added import
+import { Employee } from "@/lib/db/employee-service" // Added import
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -12,10 +14,59 @@ import { EmployeeAttendance } from "@/components/employee-attendance"
 import { EmployeeSalary } from "@/components/employee-salary"
 import { EmployeeDocuments } from "@/components/employee-documents"
 import { EmployeePayrollStructure } from "@/components/employee-payroll-structure"
+import { Skeleton } from "@/components/ui/skeleton" // Added for loading state
+import { getEmployeeService, getPayrollStructureService } from "@/lib/db/services/service-factory"
+import { useToast } from "@/hooks/use-toast"
 
 export function EmployeeProfile({ id }: { id: string }) {
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState("overview")
+  const {
+    isLoading: dbLoading,
+    error: dbError,
+    isInitialized: dbInitialized,
+  } = useDatabase()
+  const [employee, setEmployee] = useState<Employee | null>(null)
+  const [loading, setLoading] = useState<boolean>(true)
+  const [error, setError] = useState<string | null>(null)
+  const [employeeService, setEmployeeService] = useState<any>(null)
+  const [payrollStructureService, setPayrollStructureService] = useState<any>(null)
+  const [servicesLoaded, setServicesLoaded] = useState(false)
+  const [serviceError, setServiceError] = useState<string | null>(null)
+  const {toast} = useToast()
+
+  useEffect(() => {
+    const initServices = async () => {
+      try {
+        console.log("Initializing services...")
+        setServiceError(null)
+
+        const empService = await getEmployeeService()
+       // const payrollService = await getPayrollStructureService()
+
+        setEmployeeService(empService)
+        //setPayrollStructureService(payrollService)
+        setServicesLoaded(true)
+        console.log("Services initialized successfully")
+      } catch (error) {
+        console.error("Error initializing services:", error)
+        setServiceError("Failed to initialize services. The application will run with limited functionality.")
+
+        // Set services to empty implementations to avoid null errors
+        setEmployeeService({})
+        //setPayrollStructureService({})
+        setServicesLoaded(true)
+
+        toast({
+          title: "Warning",
+          description: "Running in limited functionality mode due to database initialization issues.",
+          variant: "destructive",
+        })
+      }
+    }
+
+    initServices()
+  }, [toast])
 
   // Set active tab based on URL parameter
   useEffect(() => {
@@ -25,22 +76,83 @@ export function EmployeeProfile({ id }: { id: string }) {
     }
   }, [searchParams])
 
-  // This would normally fetch employee data based on the ID
-  const employee = {
-    id,
-    name: "Robert Johnson",
-    email: "robert.johnson@example.com",
-    phone: "+1 (555) 123-4567",
-    position: "Software Engineer",
-    department: "Engineering",
-    status: "Active",
-    joinDate: "Apr 2, 2025",
-    reportingTo: "Jane Smith (CTO)",
-    employmentType: "Full Time",
-    workLocation: "Headquarters",
-    address: "123 Main St, Anytown, CA 12345",
-    payrollStructure: "Standard Staff Payroll",
+  // Fetch employee data
+  useEffect(() => {
+    if (!id || !employeeService) {
+      // Wait for ID, service, and DB initialization
+      if (dbInitialized && !employeeService) {
+        setError("Employee service is not available.")
+        setLoading(false)
+      }
+      // Keep loading true if db not initialized or no id/service yet
+      return
+    }
+
+    const fetchEmployee = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const data = await employeeService.getEmployeeById(id)
+        if (data) {
+          setEmployee(data)
+          console.log("employee: ", data)
+        } else {
+          setError(`Employee with ID ${id} not found.`)
+        }
+      } catch (err) {
+        console.error("Failed to fetch employee:", err)
+        setError(err instanceof Error ? err.message : "An unknown error occurred")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchEmployee()
+  }, [id, employeeService]) // Rerun when ID, service, or DB init status changes
+
+  // Handle loading and error states
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex flex-col gap-6 md:flex-row">
+              <div className="flex flex-col items-center gap-4 md:w-1/4">
+                <Skeleton className="h-32 w-32 rounded-full" />
+                <Skeleton className="h-6 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-6 w-1/4 mt-2" />
+              </div>
+              <div className="flex-1 space-y-4">
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-8 w-1/2" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    )
   }
+
+  if (dbError) {
+    return <div className="text-destructive">Error initializing database: {dbError}</div>
+  }
+
+  if (error) {
+    return <div className="text-destructive">Error loading employee: {error}</div>
+  }
+
+  if (!employee) {
+    return <div>Employee data not found.</div>
+  }
+
+  // Format join date (assuming employee.createdAt is the join date)
+  const joinDate = employee.createdAt ? new Date(employee.createdAt).toLocaleDateString() : "N/A"
+  const name = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || "Unnamed Employee"
+  const initials = (employee.firstName?.[0] || '') + (employee.lastName?.[0] || '') || '?'
 
   return (
     <div className="space-y-6">
@@ -50,20 +162,17 @@ export function EmployeeProfile({ id }: { id: string }) {
             <div className="flex flex-col items-center gap-4 md:w-1/4">
               <Avatar className="h-32 w-32">
                 <AvatarImage
-                  src={`/placeholder.svg?height=128&width=128&text=${employee.name.charAt(0)}`}
-                  alt={employee.name}
+                  src={`/placeholder.svg?height=128&width=128&text=${initials}`}
+                  alt={name}
                 />
                 <AvatarFallback className="text-4xl">
-                  {employee.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
+                  {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="text-center">
-                <h2 className="text-xl font-bold">{employee.name}</h2>
-                <p className="text-sm text-muted-foreground">{employee.position}</p>
-                <Badge className="mt-2">{employee.status}</Badge>
+                <h2 className="text-xl font-bold">{name}</h2>
+                <p className="text-sm text-muted-foreground">{employee.designation || "N/A"}</p>
+                <Badge className="mt-2">{employee.status || "Unknown"}</Badge>
               </div>
               <div className="grid w-full grid-cols-2 gap-2">
                 <Button variant="outline" size="sm">
@@ -78,45 +187,50 @@ export function EmployeeProfile({ id }: { id: string }) {
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground">Email</h3>
-                  <p>{employee.email}</p>
+                  <p>{employee.email || "N/A"}</p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground">Phone</h3>
-                  <p>{employee.phone}</p>
+                  <p>{employee.phone || "N/A"}</p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground">Department</h3>
-                  <p>{employee.department}</p>
+                  <p>{employee.department || "N/A"}</p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground">Join Date</h3>
-                  <p>{employee.joinDate}</p>
+                  <p>{joinDate}</p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground">Reporting To</h3>
-                  <p>{employee.reportingTo}</p>
+                  {/* Reporting To - Assuming not directly in Employee model, might need relation */}
+                  <p>{"N/A" /* employee.reportingTo */}</p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground">Employment Type</h3>
-                  <p>{employee.employmentType}</p>
+                  {/* Employment Type - Assuming not directly in Employee model */}
+                  <p>{"N/A" /* employee.employmentType */}</p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground">Work Location</h3>
-                  <p>{employee.workLocation}</p>
+                  {/* Work Location - Assuming not directly in Employee model */}
+                  <p>{"N/A" /* employee.workLocation */}</p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground">Employee ID</h3>
-                  <p>EMP-{employee.id.padStart(5, "0")}</p>
+                  <p>EMP-{employee._id.substring(employee._id.length - 5).toUpperCase()}</p> {/* Use _id */}
                 </div>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground">Address</h3>
-                <p>{employee.address}</p>
+                {/* Address - Assuming not directly in Employee model */}
+                <p>{"N/A" /* employee.address */}</p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground">Payroll Structure</h3>
+                {/* Payroll Structure - Needs fetching based on employee.payrollStructureId */}
                 <Badge variant="outline" className="bg-primary/5">
-                  {employee.payrollStructure}
+                  {employee.payrollStructureId || "Not Assigned"}
                 </Badge>
               </div>
             </div>
@@ -153,7 +267,7 @@ export function EmployeeProfile({ id }: { id: string }) {
                 <div className="rounded-lg border p-4">
                   <h3 className="text-sm font-medium text-muted-foreground">Time at Company</h3>
                   <p className="mt-1 text-2xl font-bold">2 months</p>
-                  <p className="text-xs text-muted-foreground">Since Apr 2, 2025</p>
+                  <p className="text-xs text-muted-foreground">Since {joinDate}</p>
                 </div>
               </div>
             </CardContent>
@@ -203,7 +317,8 @@ export function EmployeeProfile({ id }: { id: string }) {
                 <div className="space-y-4">
                   <div className="rounded-md border p-3">
                     <p className="text-sm">
-                      Robert is a skilled software engineer with expertise in React and Node.js.
+                      {/* Notes - Assuming not directly in Employee model */}
+                      Placeholder note about {name}.
                     </p>
                     <p className="mt-2 text-xs text-muted-foreground">Added by Jane Smith on Apr 5, 2025</p>
                   </div>
