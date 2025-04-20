@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { useDatabase } from "@/lib/db/db-context" // Added import
-import { Employee } from "@/lib/db/employee-service" // Added import
+import { useDatabase } from "@/lib/db/db-context"
+import { Employee } from "@/lib/db/employee-service"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -14,8 +14,12 @@ import { EmployeeAttendance } from "@/components/employee-attendance"
 import { EmployeeSalary } from "@/components/employee-salary"
 import { EmployeeDocuments } from "@/components/employee-documents"
 import { EmployeePayrollStructure } from "@/components/employee-payroll-structure"
-import { Skeleton } from "@/components/ui/skeleton" // Added for loading state
-import { getEmployeeService, getPayrollStructureService } from "@/lib/db/services/service-factory"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  getEmployeeService,
+  getPayrollStructureService,
+  getPayrollHistoryService, // Added import
+} from "@/lib/db/services/service-factory"
 import { useToast } from "@/hooks/use-toast"
 
 export function EmployeeProfile({ id }: { id: string }) {
@@ -33,7 +37,43 @@ export function EmployeeProfile({ id }: { id: string }) {
   const [payrollStructureService, setPayrollStructureService] = useState<any>(null)
   const [servicesLoaded, setServicesLoaded] = useState(false)
   const [serviceError, setServiceError] = useState<string | null>(null)
-  const {toast} = useToast()
+  const { toast } = useToast()
+  const [payrollStructure, setPayrollStructure] = useState<any>(null)
+  const [annualSalary, setAnnualSalary] = useState<number | null>(null)
+  const [payrollHistoryService, setPayrollHistoryService] = useState<any>(null) // Added state for history service
+  const [payslips, setPayslips] = useState<any[]>([]) // Added state for payslips
+  const [payslipsLoading, setPayslipsLoading] = useState<boolean>(true) // Added loading state for payslips
+  const [payslipsError, setPayslipsError] = useState<string | null>(null) // Added error state for payslips
+      const calculateTimeAtCompany = (joinDateStr: string | undefined): string => {
+        if (!joinDateStr) return "N/A";
+        try {
+          const joinDate = new Date(joinDateStr);
+          const now = new Date();
+          const diffTime = Math.abs(now.getTime() - joinDate.getTime());
+          // Calculate difference in days, months, years
+          const diffYears = now.getFullYear() - joinDate.getFullYear();
+          const diffMonths = now.getMonth() - joinDate.getMonth() + (12 * diffYears);
+
+          if (diffMonths < 1) {
+             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+             return `${diffDays} day${diffDays !== 1 ? 's' : ''}`;
+          } else if (diffMonths < 12) {
+            return `${diffMonths} month${diffMonths !== 1 ? 's' : ''}`;
+          } else {
+            const years = Math.floor(diffMonths / 12);
+            const months = diffMonths % 12;
+            let result = `${years} year${years !== 1 ? 's' : ''}`;
+            if (months > 0) {
+              result += `, ${months} month${months !== 1 ? 's' : ''}`;
+            }
+            return result;
+          }
+        } catch (e) {
+          console.error("Error calculating time at company:", e);
+          return "N/A";
+        }
+      };
+
 
   useEffect(() => {
     const initServices = async () => {
@@ -42,10 +82,12 @@ export function EmployeeProfile({ id }: { id: string }) {
         setServiceError(null)
 
         const empService = await getEmployeeService()
-       // const payrollService = await getPayrollStructureService()
+        const payrollStructService = await getPayrollStructureService()
+        const payrollHistService = await getPayrollHistoryService() // Initialize history service
 
         setEmployeeService(empService)
-        //setPayrollStructureService(payrollService)
+        setPayrollStructureService(payrollStructService)
+        setPayrollHistoryService(payrollHistService) // Set history service state
         setServicesLoaded(true)
         console.log("Services initialized successfully")
       } catch (error) {
@@ -54,7 +96,8 @@ export function EmployeeProfile({ id }: { id: string }) {
 
         // Set services to empty implementations to avoid null errors
         setEmployeeService({})
-        //setPayrollStructureService({})
+        setPayrollStructureService({})
+        setPayrollHistoryService({}) // Set mock history service on error
         setServicesLoaded(true)
 
         toast({
@@ -110,6 +153,67 @@ export function EmployeeProfile({ id }: { id: string }) {
     fetchEmployee()
   }, [id, employeeService]) // Rerun when ID, service, or DB init status changes
 
+
+  // Fetch payroll structure and calculate salary
+  useEffect(() => {
+    if (!employee || !payrollStructureService || !employee.payrollStructureId) {
+      setAnnualSalary(null); // Reset if no employee or structure ID
+      return;
+    }
+
+    const fetchStructureAndCalculateSalary = async () => {
+      try {
+        const structure = await payrollStructureService.getPayrollStructureById(
+          employee.payrollStructureId
+        );
+        setPayrollStructure(structure);
+
+        if (structure) {
+          const salaryDetails = payrollStructureService.calculateNetSalary(structure);
+          // Assuming calculateNetSalary returns monthly net salary
+          setAnnualSalary(salaryDetails.netSalary * 12);
+        } else {
+          console.warn(`Payroll structure ${employee.payrollStructureId} not found.`);
+          setAnnualSalary(null);
+        }
+      } catch (err) {
+        console.error("Failed to fetch payroll structure or calculate salary:", err);
+        setError(
+          (prevError) =>
+            `${prevError ? prevError + "; " : ""}Failed to load salary details.`
+        );
+        setAnnualSalary(null);
+      }
+    };
+
+    fetchStructureAndCalculateSalary();
+  }, [employee, payrollStructureService]);
+
+  // Fetch payslips
+  useEffect(() => {
+    if (!id || !payrollHistoryService) {
+      // Wait for ID and service
+      return;
+    }
+
+    const fetchPayslips = async () => {
+      setPayslipsLoading(true);
+      setPayslipsError(null);
+      try {
+        const data = await payrollHistoryService.getPayrollRecordsByEmployee(id);
+        setPayslips(data || []);
+        console.log("Payslips fetched: ", data);
+      } catch (err) {
+        console.error("Failed to fetch payslips:", err);
+        setPayslipsError(err instanceof Error ? err.message : "An unknown error occurred fetching payslips");
+        setPayslips([]);
+      } finally {
+        setPayslipsLoading(false);
+      }
+    };
+
+    fetchPayslips();
+  }, [id, payrollHistoryService]); // Rerun when ID or service changes
   // Handle loading and error states
   if (loading) {
     return (
@@ -153,6 +257,8 @@ export function EmployeeProfile({ id }: { id: string }) {
   const joinDate = employee.createdAt ? new Date(employee.createdAt).toLocaleDateString() : "N/A"
   const name = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || "Unnamed Employee"
   const initials = (employee.firstName?.[0] || '') + (employee.lastName?.[0] || '') || '?'
+
+      const timeAtCompany = calculateTimeAtCompany(employee.createdAt);
 
   return (
     <div className="space-y-6">
@@ -238,13 +344,13 @@ export function EmployeeProfile({ id }: { id: string }) {
         </CardContent>
       </Card>
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="salary">Salary Info</TabsTrigger>
           <TabsTrigger value="payroll-structure">Payroll Structure</TabsTrigger>
-          <TabsTrigger value="attendance">Attendance</TabsTrigger>
+          {/* <TabsTrigger value="attendance">Attendance</TabsTrigger> */}
           <TabsTrigger value="payslips">Payslips</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
+          {/* <TabsTrigger value="documents">Documents</TabsTrigger> */}
         </TabsList>
         <TabsContent value="overview" className="space-y-4 pt-4">
           <Card>
@@ -256,17 +362,22 @@ export function EmployeeProfile({ id }: { id: string }) {
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="rounded-lg border p-4">
                   <h3 className="text-sm font-medium text-muted-foreground">Current Salary</h3>
-                  <p className="mt-1 text-2xl font-bold">$85,000</p>
-                  <p className="text-xs text-muted-foreground">Annual</p>
+                  <p className="mt-1 text-2xl font-bold">
+                    {annualSalary !== null
+                      ? `K${annualSalary.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : "N/A"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Annual Net Salary</p>
                 </div>
                 <div className="rounded-lg border p-4">
                   <h3 className="text-sm font-medium text-muted-foreground">Leave Balance</h3>
-                  <p className="mt-1 text-2xl font-bold">15 days</p>
-                  <p className="text-xs text-muted-foreground">Remaining for 2025</p>
+                  {/* TODO: Fetch actual leave balance */}
+                  <p className="mt-1 text-2xl font-bold">N/A</p>
+                  <p className="text-xs text-muted-foreground">Remaining (Placeholder)</p>
                 </div>
                 <div className="rounded-lg border p-4">
                   <h3 className="text-sm font-medium text-muted-foreground">Time at Company</h3>
-                  <p className="mt-1 text-2xl font-bold">2 months</p>
+                  <p className="mt-1 text-2xl font-bold">{timeAtCompany}</p>
                   <p className="text-xs text-muted-foreground">Since {joinDate}</p>
                 </div>
               </div>
@@ -279,33 +390,8 @@ export function EmployeeProfile({ id }: { id: string }) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="flex items-start gap-4">
-                    <div className="rounded-full bg-primary/10 p-2">
-                      <Badge variant="outline" className="h-2 w-2 rounded-full bg-primary p-0" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">Salary Updated</p>
-                      <p className="text-xs text-muted-foreground">May 15, 2025</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-4">
-                    <div className="rounded-full bg-primary/10 p-2">
-                      <Badge variant="outline" className="h-2 w-2 rounded-full bg-primary p-0" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">Leave Approved</p>
-                      <p className="text-xs text-muted-foreground">May 10, 2025</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-4">
-                    <div className="rounded-full bg-primary/10 p-2">
-                      <Badge variant="outline" className="h-2 w-2 rounded-full bg-primary p-0" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">Payslip Generated</p>
-                      <p className="text-xs text-muted-foreground">Apr 30, 2025</p>
-                    </div>
-                  </div>
+                  {/* TODO: Fetch actual recent activity */}
+                  <p className="text-sm text-muted-foreground">No recent activity available.</p>
                 </div>
               </CardContent>
             </Card>
@@ -315,17 +401,8 @@ export function EmployeeProfile({ id }: { id: string }) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="rounded-md border p-3">
-                    <p className="text-sm">
-                      {/* Notes - Assuming not directly in Employee model */}
-                      Placeholder note about {name}.
-                    </p>
-                    <p className="mt-2 text-xs text-muted-foreground">Added by Jane Smith on Apr 5, 2025</p>
-                  </div>
-                  <div className="rounded-md border p-3">
-                    <p className="text-sm">Completed onboarding process successfully.</p>
-                    <p className="mt-2 text-xs text-muted-foreground">Added by HR on Apr 3, 2025</p>
-                  </div>
+                  {/* TODO: Fetch actual notes */}
+                  <p className="text-sm text-muted-foreground">No notes available.</p>
                   <Button variant="outline" size="sm" className="w-full">
                     Add Note
                   </Button>
@@ -335,16 +412,16 @@ export function EmployeeProfile({ id }: { id: string }) {
           </div>
         </TabsContent>
         <TabsContent value="salary" className="pt-4">
-          <EmployeeSalary />
+          <EmployeeSalary salaryData={payrollStructure} /> {/* Pass payroll structure */}
         </TabsContent>
         <TabsContent value="payroll-structure" className="pt-4">
-          <EmployeePayrollStructure />
+          <EmployeePayrollStructure structure={payrollStructure} /> {/* Pass payroll structure */}
         </TabsContent>
         <TabsContent value="attendance" className="pt-4">
           <EmployeeAttendance />
         </TabsContent>
         <TabsContent value="payslips" className="pt-4">
-          <EmployeePayslips />
+          <EmployeePayslips payslips={payslips} isLoading={payslipsLoading} error={payslipsError} /> {/* Pass payslips data, loading and error state */}
         </TabsContent>
         <TabsContent value="documents" className="pt-4">
           <EmployeeDocuments />

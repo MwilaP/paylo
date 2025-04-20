@@ -4,30 +4,79 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { FileEdit, Download } from "lucide-react"
 
-export function EmployeePayrollStructure() {
-  // Mock data for the assigned payroll structure
-  const structure = {
-    id: "1",
-    name: "Standard Staff Payroll",
-    frequency: "Monthly",
-    basicSalary: 5000,
-    allowances: [
-      { id: "1", name: "Housing", type: "percentage", value: 20, amount: 1000 },
-      { id: "2", name: "Transport", type: "fixed", value: 500, amount: 500 },
-    ],
-    deductions: [
-      { id: "1", name: "Tax", type: "percentage", value: 10, preTax: true, amount: 650 },
-      { id: "2", name: "Pension", type: "percentage", value: 5, preTax: true, amount: 325 },
-      { id: "3", name: "Health Insurance", type: "fixed", value: 200, preTax: false, amount: 200 },
-    ],
-    grossPay: 6500,
-    netPay: 5325,
-    assignedDate: "Apr 5, 2025",
-    assignedBy: "Emily Davis (HR Coordinator)",
+// Define props interface
+interface EmployeePayrollStructureProps {
+  structure: any // Ideally, define a stricter type based on PayrollStructure
+}
+
+export function EmployeePayrollStructure({ structure }: EmployeePayrollStructureProps) {
+  // Helper function to calculate amounts (similar to EmployeeSalary, could be refactored)
+  const calculateAmounts = (struct: any) => {
+    if (!struct) {
+      return {
+        basicSalary: 0,
+        allowances: [],
+        deductions: [],
+        grossPay: 0,
+        totalDeductions: 0,
+        netPay: 0,
+      }
+    }
+
+    const baseSalary = struct.basicSalary || 0
+    let grossPay = baseSalary
+    const calculatedAllowances = (struct.allowances || []).map((a: any) => {
+      const amount = a.type === "percentage" ? (baseSalary * a.value) / 100 : a.value
+      grossPay += amount
+      return { ...a, amount }
+    })
+
+    let totalDeductions = 0
+    let taxableAmount = grossPay // Simplified tax calculation base
+    const calculatedDeductions = (struct.deductions || []).map((d: any) => {
+      let deductionAmount = 0
+      const baseForPercentage = d.preTax ? taxableAmount : grossPay
+      if (d.type === "percentage") {
+        deductionAmount = (baseForPercentage * d.value) / 100
+      } else {
+        deductionAmount = d.value
+      }
+      totalDeductions += deductionAmount
+      if (d.preTax) {
+        taxableAmount -= deductionAmount
+      }
+      return { ...d, amount: deductionAmount }
+    })
+
+    const netPay = grossPay - totalDeductions
+
+    return {
+      basicSalary: baseSalary,
+      allowances: calculatedAllowances,
+      deductions: calculatedDeductions,
+      grossPay,
+      totalDeductions,
+      netPay,
+    }
   }
+
+  const details = calculateAmounts(structure)
+  const annualSalary = details.netPay * 12 // Assuming monthly frequency
 
   return (
     <div className="space-y-6">
+      {!structure ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Assigned Payroll Structure</CardTitle>
+            <CardDescription>Loading structure details...</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p>No payroll structure assigned or data is loading.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
@@ -49,13 +98,14 @@ export function EmployeePayrollStructure() {
           <div className="mb-6 rounded-md border p-4">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <h3 className="text-lg font-medium">{structure.name}</h3>
+                <h3 className="text-lg font-medium">{structure.name || "Unnamed Structure"}</h3>
                 <p className="text-sm text-muted-foreground">
-                  Assigned on {structure.assignedDate} by {structure.assignedBy}
+                  {/* Assuming assignment info is not directly on structure, using placeholder */}
+                  Assigned on {structure.createdAt ? new Date(structure.createdAt).toLocaleDateString() : "N/A"} by {"System"}
                 </p>
               </div>
               <Badge variant="outline" className="md:self-start">
-                {structure.frequency}
+                {structure.frequency || "N/A"}
               </Badge>
             </div>
           </div>
@@ -77,22 +127,22 @@ export function EmployeePayrollStructure() {
                     <TableCell>Basic Salary</TableCell>
                     <TableCell>Fixed</TableCell>
                     <TableCell className="text-right">-</TableCell>
-                    <TableCell className="text-right">${structure.basicSalary.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">K{details.basicSalary.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                   </TableRow>
-                  {structure.allowances.map((allowance) => (
-                    <TableRow key={allowance.id}>
+                  {details.allowances.map((allowance: any) => (
+                    <TableRow key={allowance._id || allowance.name}>
                       <TableCell>{allowance.name}</TableCell>
                       <TableCell>{allowance.type === "percentage" ? "Percentage" : "Fixed"}</TableCell>
                       <TableCell className="text-right">
-                        {allowance.type === "percentage" ? `${allowance.value}%` : `$${allowance.value}`}
+                        {allowance.type === "percentage" ? `${allowance.value}%` : `K${allowance.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                       </TableCell>
-                      <TableCell className="text-right">${allowance.amount.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">K{allowance.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="font-medium">
                     <TableCell>Total Earnings</TableCell>
                     <TableCell colSpan={2}></TableCell>
-                    <TableCell className="text-right">${structure.grossPay.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">K{details.grossPay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
@@ -109,8 +159,8 @@ export function EmployeePayrollStructure() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {structure.deductions.map((deduction) => (
-                    <TableRow key={deduction.id}>
+                  {details.deductions.map((deduction: any) => (
+                    <TableRow key={deduction._id || deduction.name}>
                       <TableCell>
                         {deduction.name}
                         <span className="ml-1 text-xs text-muted-foreground">
@@ -119,16 +169,16 @@ export function EmployeePayrollStructure() {
                       </TableCell>
                       <TableCell>{deduction.type === "percentage" ? "Percentage" : "Fixed"}</TableCell>
                       <TableCell className="text-right">
-                        {deduction.type === "percentage" ? `${deduction.value}%` : `$${deduction.value}`}
+                        {deduction.type === "percentage" ? `${deduction.value}%` : `K${deduction.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                       </TableCell>
-                      <TableCell className="text-right">${deduction.amount.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">K{deduction.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="font-medium">
                     <TableCell>Total Deductions</TableCell>
                     <TableCell colSpan={2}></TableCell>
                     <TableCell className="text-right">
-                      ${structure.deductions.reduce((sum, d) => sum + d.amount, 0).toLocaleString()}
+                      K{details.totalDeductions.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </TableCell>
                   </TableRow>
                 </TableBody>
@@ -139,11 +189,11 @@ export function EmployeePayrollStructure() {
           <div className="mt-6 rounded-lg border p-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium">Net Monthly Salary</h3>
-              <p className="text-2xl font-bold">${structure.netPay.toLocaleString()}</p>
+              <p className="text-2xl font-bold">K{details.netPay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
             <div className="mt-2 flex items-center justify-between">
               <h3 className="text-sm font-medium">Annual Salary</h3>
-              <p className="text-lg font-medium">${(structure.netPay * 12).toLocaleString()}</p>
+              <p className="text-lg font-medium">K{annualSalary.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
           </div>
         </CardContent>
@@ -166,17 +216,18 @@ export function EmployeePayrollStructure() {
               </TableRow>
             </TableHeader>
             <TableBody>
+              {/* TODO: Replace with actual structure change history */}
               <TableRow>
-                <TableCell>Apr 5, 2025</TableCell>
-                <TableCell>-</TableCell>
-                <TableCell>Standard Staff Payroll</TableCell>
-                <TableCell>Emily Davis</TableCell>
-                <TableCell>Initial assignment</TableCell>
+                 <TableCell colSpan={5} className="text-center text-muted-foreground">
+                   Structure change history not yet implemented.
+                 </TableCell>
               </TableRow>
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+        </>
+      )}
     </div>
   )
 }
