@@ -1,6 +1,9 @@
 "use client"
 
 import { getDatabases } from "../db-service"
+import { PayrollStructure } from "../models/payroll-structure.model"
+import { PayrollHistory } from "../models/payroll-history.model"
+import { Employee } from "../models/employee.model" // Assuming Employee model exists
 
 // Mock services for when database is not available
 const mockEmployeeService = {
@@ -75,7 +78,7 @@ const mockPayrollStructureService = {
     console.warn("Using mock payroll structure service: searchPayrollStructures")
     return []
   },
-  calculateSalaryDetails: (structure) => {
+  calculateSalaryDetails: (structure: PayrollStructure) => {
     console.warn("Using mock payroll structure service: calculateSalaryDetails")
     return {
       basicSalary: structure?.basicSalary || 0,
@@ -224,5 +227,62 @@ export const getPayrollHistoryService = async () => {
   } catch (error) {
     console.error("Error getting payroll history service:", error)
     return mockPayrollHistoryService
+  }
+}
+
+// Function to save payroll history records
+export const savePayrollHistory = async (records: PayrollHistory[]): Promise<PayrollHistory[]> => {
+  try {
+    const payrollHistoryServiceInstance = await getPayrollHistoryService()
+    
+    // Process records sequentially to maintain order
+    const savedRecords: PayrollHistory[] = []
+    for (const record of records) {
+      const savedRecord = await payrollHistoryServiceInstance.createPayrollRecord(record)
+      if (savedRecord) {
+        savedRecords.push(savedRecord)
+      }
+    }
+    
+    return Promise.resolve(savedRecords)
+  } catch (error) {
+    console.error("Error saving payroll history:", error)
+    throw error // Re-throw to allow component to handle
+  }
+}
+
+// Function to fetch all payroll structures
+export const fetchPayrollStructures = async (): Promise<PayrollStructure[]> => {
+  try {
+    const payrollStructureServiceInstance = await getPayrollStructureService()
+    const structures = await payrollStructureServiceInstance.getAllPayrollStructures()
+    return structures || [] // Return empty array if null/undefined
+  } catch (error) {
+    console.error("Error fetching payroll structures:", error)
+    return [] // Return empty array on error
+  }
+}
+
+// Function to fetch all employees
+export const fetchAllEmployees = async (): Promise<Employee[]> => {
+  try {
+    const employeeServiceInstance = await getEmployeeService()
+    const employees = await employeeServiceInstance.getAllEmployees()
+    return employees || [] // Return empty array if null/undefined
+  } catch (error) {
+    console.error("Error fetching employees:", error)
+    return [] // Return empty array on error
+  }
+}
+
+// Function to fetch employees by payroll structure
+export const fetchEmployeesByStructure = async (structureId: string): Promise<Employee[]> => {
+  try {
+    const employeeServiceInstance = await getEmployeeService()
+    const employees = await employeeServiceInstance.getEmployeesByPayrollStructure(structureId)
+    return employees || [] // Return empty array if null/undefined
+  } catch (error) {
+    console.error(`Error fetching employees for structure ${structureId}:`, error)
+    return [] // Return empty array on error
   }
 }
