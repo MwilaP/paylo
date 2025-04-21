@@ -6,14 +6,49 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { DollarSign, FileText } from "lucide-react"
+import { DollarSign, Download, Eye, FileText, Mail } from "lucide-react"
 import { useDatabase } from "@/lib/db/db-context"
-
+import { getPayrollHistoryService } from "@/lib/db/services/service-factory"
+import { useToast } from "@/hooks/use-toast"
 export function PayrollHistory() {
   const router = useRouter()
-  const { payrollHistoryService, isLoading } = useDatabase()
-  const [payrollHistory, setPayrollHistory] = useState<any[]>([])
+  //const { isLoading } = useDatabase()
+  const [payrollHistoryService, setPayrollHistoryService] = useState<any>(null)
+  const [servicesLoaded, setServicesLoaded] = useState(false)
+  const [serviceError, setServiceError] = useState<string | null>(null)
 
+  const [isLoading, setIsLoading] = useState(false)
+  const [payrollHistory, setPayrollHistory] = useState<any[]>([])
+  const { toast } = useToast()
+
+
+  useEffect(() => {
+    const getPayrollService = async () => {
+      try {
+        const payrollservice = await getPayrollHistoryService()
+        setPayrollHistoryService(payrollservice)
+        console.log('Payroll service initialized')
+
+      } catch (error) {
+
+        console.error("Error initializing services:", error)
+        setServiceError("Failed to initialize services. The application will run with limited functionality.")
+
+        // Set services to empty implementations to avoid null errors
+        //  setEmployeeService({})
+        setPayrollHistoryService({})
+        setServicesLoaded(true)
+
+        toast({
+          title: "Warning",
+          description: "Running in limited functionality mode due to database initialization issues.",
+          variant: "destructive",
+        })
+
+      }
+    }
+    getPayrollService()
+  }, [])
   useEffect(() => {
     const loadPayrollHistory = async () => {
       if (!payrollHistoryService) return
@@ -24,7 +59,7 @@ export function PayrollHistory() {
         const sorted = [...data].sort((a, b) => {
           return new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
         })
-
+        console.log("payroll-history", sorted)
         setPayrollHistory(sorted)
       } catch (error) {
         console.error("Error loading payroll history:", error)
@@ -103,12 +138,28 @@ export function PayrollHistory() {
                     <TableCell className="font-medium">{payroll.period || "Monthly Payroll"}</TableCell>
                     <TableCell>{payroll.date ? new Date(payroll.date).toLocaleDateString() : "—"}</TableCell>
                     <TableCell>{payroll.employeeCount || 0}</TableCell>
-                    <TableCell>${payroll.totalAmount?.toLocaleString() || "0"}</TableCell>
+                    <TableCell>K{payroll.totalAmount?.toLocaleString() || "0"}</TableCell>
                     <TableCell>{getStatusBadge(payroll.status)}</TableCell>
-                    <TableCell className="text-right">
+                    {/* <TableCell className="text-right">
                       <Button variant="ghost" size="sm" onClick={() => router.push(`/payroll/history/${payroll._id}`)}>
                         View
                       </Button>
+                    </TableCell> */}
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => router.push(`/payroll/history/${payroll._id}`)}>
+                          <Eye className="mr-2 h-4 w-4" />
+                          View
+                        </Button>
+                        <Button variant="outline" size="sm">
+                          <Download className="mr-2 h-4 w-4" />
+                          Export
+                        </Button>
+                        <Button variant="outline" size="sm">
+                          <Mail className="mr-2 h-4 w-4" />
+                          Email All
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

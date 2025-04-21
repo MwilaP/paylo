@@ -49,15 +49,12 @@ export function PayrollSettings() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="default-currency">Default Currency</Label>
-                <Select defaultValue="usd">
+                <Select defaultValue="zmw">
                   <SelectTrigger id="default-currency">
                     <SelectValue placeholder="Select currency" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="usd">USD - US Dollar</SelectItem>
-                    <SelectItem value="eur">EUR - Euro</SelectItem>
-                    <SelectItem value="gbp">GBP - British Pound</SelectItem>
-                    <SelectItem value="jpy">JPY - Japanese Yen</SelectItem>
+                    <SelectItem value="zmw">ZMW - ZAMBIAN KWATCHA</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -68,101 +65,6 @@ export function PayrollSettings() {
                 <p className="text-sm text-muted-foreground">Automatically process payroll on scheduled dates</p>
               </div>
               <Switch id="auto-process" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Tax Settings</CardTitle>
-          <CardDescription>Configure tax calculation preferences</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="tax-year">Tax Year</Label>
-                <Select defaultValue="2025">
-                  <SelectTrigger id="tax-year">
-                    <SelectValue placeholder="Select tax year" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="2025">2025</SelectItem>
-                    <SelectItem value="2024">2024</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tax-calculation">Tax Calculation Method</Label>
-                <Select defaultValue="progressive">
-                  <SelectTrigger id="tax-calculation">
-                    <SelectValue placeholder="Select method" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="progressive">Progressive</SelectItem>
-                    <SelectItem value="flat">Flat Rate</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Default Tax Rates</Label>
-              <div className="rounded-md border">
-                <div className="grid grid-cols-3 gap-4 p-4 font-medium">
-                  <div>Income Range</div>
-                  <div>Rate (%)</div>
-                  <div></div>
-                </div>
-                <div className="border-t grid grid-cols-3 gap-4 p-4">
-                  <div className="flex items-center">$0 - $10,000</div>
-                  <div>
-                    <Input type="number" defaultValue="10" />
-                  </div>
-                  <div>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      &times;
-                    </Button>
-                  </div>
-                </div>
-                <div className="border-t grid grid-cols-3 gap-4 p-4">
-                  <div className="flex items-center">$10,001 - $50,000</div>
-                  <div>
-                    <Input type="number" defaultValue="15" />
-                  </div>
-                  <div>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      &times;
-                    </Button>
-                  </div>
-                </div>
-                <div className="border-t grid grid-cols-3 gap-4 p-4">
-                  <div className="flex items-center">$50,001 - $100,000</div>
-                  <div>
-                    <Input type="number" defaultValue="20" />
-                  </div>
-                  <div>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      &times;
-                    </Button>
-                  </div>
-                </div>
-                <div className="border-t grid grid-cols-3 gap-4 p-4">
-                  <div className="flex items-center">$100,001+</div>
-                  <div>
-                    <Input type="number" defaultValue="25" />
-                  </div>
-                  <div>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      &times;
-                    </Button>
-                  </div>
-                </div>
-                <div className="border-t p-4">
-                  <Button variant="outline" size="sm">
-                    Add Tax Bracket
-                  </Button>
-                </div>
-              </div>
             </div>
           </div>
         </CardContent>
