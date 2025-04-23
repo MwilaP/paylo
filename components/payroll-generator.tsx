@@ -24,6 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
+import { calculateNetSalary } from "@/lib/utils/payroll-calculations"
 
 export function PayrollGenerator() {
   const [step, setStep] = useState(1)
@@ -40,13 +41,13 @@ export function PayrollGenerator() {
     const loadData = async () => {
       try {
         setIsLoading(true)
-        
+
         // Fetch both employees and payroll structures
         const [employees, structures] = await Promise.all([
           fetchAllEmployees(),
           fetchPayrollStructures()
         ])
-        
+
         // Enhance structures with calculated net salary
         const enhancedStructures = structures.map(structure => ({
           ...structure,
@@ -54,27 +55,38 @@ export function PayrollGenerator() {
             (Array.isArray(structure.allowances) ? structure.allowances.reduce((sum: number, a: any) => sum + (a.value || 0), 0) : 0) -
             (Array.isArray(structure.deductions) ? structure.deductions.reduce((sum: number, d: any) => sum + (d.value || 0), 0) : 0))
         }))
-        
+
         // Create a map of payroll structures by ID for quick lookup
         const structuresMap = enhancedStructures.reduce((map: Record<string, any>, structure: any) => {
           map[structure._id] = structure
           return map
         }, {})
-        
+
         // Enhance employees with payroll structure data
         const enhancedEmployees = employees.map((employee: any) => {
           const structure = employee.payrollStructureId ? structuresMap[employee.payrollStructureId] : null
-          
+
+
+
           // Calculate salary details based on the employee's payroll structure
           const basicSalary = structure?.basicSalary || 0
-          const allowancesTotal = structure && Array.isArray(structure.allowances)
-            ? structure.allowances.reduce((sum: number, a: any) => sum + (a.value || 0), 0)
-            : 0
-          const deductionsTotal = structure && Array.isArray(structure.deductions)
-            ? structure.deductions.reduce((sum: number, d: any) => sum + (d.value || 0), 0)
-            : 0
-          const netSalary = structure?.calculatedNetSalary || (basicSalary + allowancesTotal - deductionsTotal)
-          
+
+          const cal = () => {
+            if (!structure) {
+              return
+            }
+            const salaryStuctures = calculateNetSalary(basicSalary, structure.allowances, structure.deductions)
+            return salaryStuctures
+          }
+
+          const employeesStructures = cal()
+
+          console.log("CALCULATOR", employeesStructures)
+
+          const allowancesTotal = employeesStructures ? employeesStructures?.totalAllowances : 0
+          const deductionsTotal = employeesStructures ? employeesStructures?.totalDeductions : 0
+          const netSalary = employeesStructures ? employeesStructures?.netSalary : 0
+
           return {
             ...employee,
             payrollStructure: structure,
@@ -84,7 +96,7 @@ export function PayrollGenerator() {
             netSalary: netSalary
           }
         })
-        
+
         setEmployeeData(enhancedEmployees)
         setPayrollStructures(enhancedStructures)
       } catch (error) {
@@ -98,7 +110,7 @@ export function PayrollGenerator() {
         setIsLoading(false)
       }
     }
-    
+
     loadData()
   }, [toast])
 
@@ -156,7 +168,7 @@ export function PayrollGenerator() {
       const selectedEmployeeData = displayEmployees.filter(employee =>
         selectedEmployees.includes(employee._id)
       )
-      
+
       // Create payroll items from selected employees
       const payrollItems = selectedEmployeeData.map(employee => ({
         employeeId: employee._id,
@@ -168,10 +180,10 @@ export function PayrollGenerator() {
         netSalary: employee.netSalary || 0,
         payrollStructureId: employee.payrollStructureId || ''
       }))
-      
+
       // Calculate total amount as the sum of all net salaries
       const totalAmount = payrollItems.reduce((sum, item) => sum + item.netSalary, 0)
-      
+
       // Create a single payroll record with all employee items
       const payrollRecord: PayrollHistory = {
         _id: `payroll_${uuidv4()}`,
@@ -185,17 +197,17 @@ export function PayrollGenerator() {
         updatedAt: new Date().toISOString(),
         items: payrollItems
       }
-      
+
       const payrollRecords = [payrollRecord]
-      
+
       // Save payroll records to database
       await savePayrollHistory(payrollRecords)
-      
+
       toast({
         title: "Payroll generated successfully",
         description: `Payroll for ${format(date, "MMMM yyyy")} has been generated for ${selectedEmployees.length} employees.`,
       })
-      
+
       router.push("/payroll")
     } catch (error) {
       console.error("Error generating payroll:", error)
@@ -327,7 +339,7 @@ export function PayrollGenerator() {
                       <TableCell className="font-medium">{`${employee.firstName || ''} ${employee.lastName || ''}`}</TableCell>
                       <TableCell>{employee.department || ''}</TableCell>
                       <TableCell>{employee.designation || ''}</TableCell>
-                      <TableCell className="text-right">${(employee.baseSalary || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right">K{(employee.baseSalary || 0).toLocaleString()}</TableCell>
                     </TableRow>
                   ))
                 )}
