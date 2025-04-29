@@ -2,6 +2,8 @@
 
 import { v4 as uuidv4 } from "uuid"
 import { dbOperations } from "../db-service"
+import { getEmployeeService, getPayrollStructureService } from "./service-factory"
+import { Payslip, calculateSalaryBreakdown } from "../models/payslip.model"
 
 // Define the PayrollHistory type for proper typing
 export interface PayrollHistory {
@@ -369,6 +371,103 @@ export const payrollHistoryService = (db: any) => ({
       const payrollError = new PayrollError(`Failed to cancel payroll (current status: ${error.currentStatus || "unknown"}): ${error.message || "Unknown error"}`);
       payrollError.currentStatus = error.currentStatus;
       throw payrollError;
+    }
+  },
+
+  /**
+   * Generates payslips for all employees in a payroll history record
+   * @param payrollHistoryId The ID of the payroll history record
+   * @returns Promise resolving to an array of Payslip objects
+   * @throws PayrollError if payroll history not found or other errors occur
+   */
+  async getPayslipsByPayrollHistory(payrollHistoryId: string): Promise<Payslip[]> {
+    if (!db) {
+      throw new PayrollError("Database connection not available");
+    }
+
+    try {
+      // 1. Get the payroll history record
+      const payrollHistory = await this.getPayrollRecordById(payrollHistoryId);
+      if (!payrollHistory) {
+        throw new PayrollError(`Payroll history with ID ${payrollHistoryId} not found`);
+      }
+
+      // 2. Get all employees (using service factory)
+      const employeeService = await getEmployeeService();
+      const employees = await employeeService.getAllEmployees();
+      if (!employees || employees.length === 0) {
+        throw new PayrollError("No employees found for payroll");
+      }
+
+      // 3. Get payroll structure service
+      const payrollStructureService = await getPayrollStructureService();
+
+      // 4. Process each employee to generate payslip
+      const payslips: Payslip[] = [];
+      
+      for (const employee of employees) {
+        try {
+          // Skip if employee has no payroll structure
+          if (!employee.payrollStructureId) {
+            console.warn(`Employee ${employee._id} has no payroll structure assigned`);
+            continue;
+          }
+
+          // Get employee's payroll structure
+          const payrollStructure = await payrollStructureService.getPayrollStructureById(employee.payrollStructureId);
+          if (!payrollStructure) {
+            console.warn(`Payroll structure ${employee.payrollStructureId} not found for employee ${employee._id}`);
+            continue;
+          }
+
+          // Calculate salary breakdown
+          const salaryBreakdown = calculateSalaryBreakdown(
+            payrollStructure.basicSalary,
+            payrollStructure.allowances,
+            payrollStructure.deductions
+          );
+
+          // Create payslip
+          const payslip: Payslip = {
+            _id: `payslip_${Date.now()}_${employee._id}`,
+            payrollHistoryId,
+            employee: {
+              id: employee._id,
+              name: `${employee.firstName} ${employee.lastName}`,
+              position: employee.designation || '',
+              department: employee.department || '',
+              employeeNumber: employee._id,
+            },
+            payPeriod: {
+              startDate: payrollHistory.date,
+              endDate: payrollHistory.date, // Same as start date for now
+              paymentDate: new Date().toISOString(),
+            },
+            salary: salaryBreakdown,
+            payrollStructure: {
+              _id: payrollStructure._id,
+              name: payrollStructure.name,
+              frequency: payrollStructure.frequency,
+            },
+            status: 'generated',
+            createdAt: new Date().toISOString(),
+          };
+
+          payslips.push(payslip);
+        } catch (error) {
+          console.error(`Error generating payslip for employee ${employee._id}:`, error);
+          // Continue with next employee even if one fails
+        }
+      }
+
+      if (payslips.length === 0) {
+        throw new PayrollError("No valid payslips could be generated");
+      }
+
+      return payslips;
+    } catch (error: any) {
+      console.error(`Error generating payslips for payroll ${payrollHistoryId}:`, error);
+      throw new PayrollError(`Failed to generate payslips: ${error?.message || "Unknown error"}`);
     }
   },
 

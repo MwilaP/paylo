@@ -47,7 +47,7 @@ export function MainSidebar({ user }: MainSidebarProps) {
             <NavItem href="/attendance" icon={Clock} label="Attendance" isActive={pathname.startsWith("/attendance")} />
             <NavItem href="/leave" icon={Calendar} label="Leave" isActive={pathname.startsWith("/leave")} />
             <NavItem href="/payroll" icon={CreditCard} label="Payroll" isActive={pathname.startsWith("/payroll")} />
-            <NavItem href="/payslips" icon={FileText} label="Payslips" isActive={pathname.startsWith("/payslips")} />
+            <NavItem href="/payslip" icon={FileText} label="Payslips" isActive={pathname.startsWith("/payslips")} />
             <NavItem href="/reports" icon={BarChart3} label="Reports" isActive={pathname.startsWith("/reports")} />
             <NavItem href="/settings" icon={Settings} label="Settings" isActive={pathname.startsWith("/settings")} />
           </nav>

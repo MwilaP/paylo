@@ -170,6 +170,11 @@ export function EmployeesList() {
     router.push(`/employees/${id}/edit`)
   }
 
+  const handleManageLeave = (id: string) => {
+    console.log('employeesID', id)
+    router.push(`/employees/${id}/leave`)
+  }
+
   const handleAddEmployee = () => {
     router.push("/employees/new")
   }
@@ -289,6 +294,9 @@ export function EmployeesList() {
                             View Profile
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleEditEmployee(employee._id)}>Edit</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleManageLeave(employee._id)}>
+                            Manage Leave
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
