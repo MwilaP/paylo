@@ -15,10 +15,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
+import sgMail from '@sendgrid/mail'
+import { blobToBase64 } from '@maruware/blob-to-base64'
+
 
 // Services and Models
-import { getPayrollHistoryService } from "@/lib/db/services/service-factory"
+import { getPayrollHistoryService, getEmployeeService } from "@/lib/db/services/service-factory"
 import type { Payslip } from "@/lib/db/models/payslip.model"
+import { calculateLeaveBalance } from "@/lib/utils/leave-calculations"
+import { generatePayslipPDFs } from "./pdfgeneration"
 
 interface PayslipDetailPageProps {
   params: {
@@ -31,6 +36,8 @@ export default function PayslipDetailPage({ params }: PayslipDetailPageProps) {
   const { id } = params
 
   const [payslips, setPayslips] = useState<Payslip[] | null>(null)
+  const [leaveDaysYTD, setLeaveDaysYTD] = useState<number | null>(null)
+  const [grossPayYTD, setGrossPayYTD] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [emailDialogOpen, setEmailDialogOpen] = useState(false)
@@ -43,14 +50,16 @@ export default function PayslipDetailPage({ params }: PayslipDetailPageProps) {
         setError(null)
 
         const payrollService = await getPayrollHistoryService()
+        console.log(id)
         const payslipData = await payrollService.getPayslipsByPayrollHistory(id)
 
         if (!payslipData || payslipData.length === 0) {
           setError("Payslip not found")
           return
         }
-
+        console.log(payslipData)
         setPayslips(payslipData)
+      
       } catch (error) {
         console.error("Error fetching payslip:", error)
         setError("Failed to load payslip data")
@@ -73,7 +82,7 @@ export default function PayslipDetailPage({ params }: PayslipDetailPageProps) {
   // Format date
   const formatDate = (dateString: string) => {
     try {
-      return format(new Date(dateString), 'PPP')
+      return format(new Date(dateString), "dd/MM/yyyy")
     } catch (error) {
       return dateString
     }
@@ -100,153 +109,255 @@ export default function PayslipDetailPage({ params }: PayslipDetailPageProps) {
     <head>
       <title>Payslip</title>
       <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
         @page {
           size: A4;
           margin: 1cm;
         }
-        body {
-          font-family: Arial, sans-serif;
+        
+        * {
+          box-sizing: border-box;
           margin: 0;
           padding: 0;
-          color: #333;
-          background-color: #fff;
         }
+        
+        body {
+          font-family: 'Inter', sans-serif;
+          color: #2D3748;
+          background-color: #f7f9fc;
+          line-height: 1.5;
+        }
+        
         .payslip {
           width: 100%;
           max-width: 800px;
-          margin: 0 auto 20px;
-          padding: 20px;
-          border: 2px solid #ddd;
-          box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+          margin: 0 auto;
+          padding: 30px;
+          border-radius: 12px;
+          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
           page-break-after: always;
           background-color: #fff;
+          position: relative;
+          overflow: hidden;
         }
+        
         .payslip:last-child {
           page-break-after: auto;
         }
+        
+        .brand-accent {
+          position: absolute;
+          top: 0;
+          left: 0;
+          height: 8px;
+          width: 100%;
+          background: linear-gradient(90deg, #1E40AF 0%, #3B82F6 100%);
+        }
+        
         .header {
           display: flex;
           justify-content: space-between;
-          margin-bottom: 20px;
-          border-bottom: 2px solid #0052cc;
-          padding-bottom: 15px;
+          align-items: center;
+          padding: 20px 0 25px;
+          margin-top: 10px;
+          border-bottom: 1px solid #E2E8F0;
         }
-        .company-name {
-          font-size: 24px;
-          font-weight: bold;
-          color: #0052cc;
-        }
-        .payslip-title {
-          font-size: 20px;
-          font-weight: bold;
-          color: #0052cc;
-          text-align: right;
-        }
-        .payslip-period {
-          text-align: right;
-          font-size: 14px;
-          color: #555;
-        }
-        .info-section {
+        
+        .company-info {
           display: flex;
-          margin-bottom: 20px;
+          align-items: center;
         }
-        .info-column {
-          flex: 1;
-          padding: 10px;
-        }
-        .info-title {
+        
+        .company-logo {
+          height: 45px;
+          width: 45px;
+          background-color: #1E40AF;
+          border-radius: 8px;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
           font-weight: bold;
-          margin-bottom: 10px;
-          color: #0052cc;
-          font-size: 16px;
+          margin-right: 15px;
         }
+        
+        .company-name {
+          font-size: 20px;
+          font-weight: 700;
+          color: #1E40AF;
+          letter-spacing: -0.5px;
+        }
+        
+        .company-tagline {
+          font-size: 12px;
+          color: #718096;
+          margin-top: 2px;
+        }
+        
+        .payslip-meta {
+          text-align: right;
+        }
+        
+        .payslip-title {
+          font-size: 22px;
+          font-weight: 700;
+          color: #1E40AF;
+          letter-spacing: -0.5px;
+        }
+        
+        .payslip-period {
+          font-size: 13px;
+          color: #718096;
+          margin-top: 5px;
+        }
+        
+        .info-section {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 25px;
+          margin: 25px 0;
+          padding-bottom: 25px;
+          border-bottom: 1px solid #E2E8F0;
+        }
+        
+        .info-card {
+          background-color: #F8FAFC;
+          border-radius: 8px;
+          padding: 15px;
+        }
+        
+        .info-title {
+          font-weight: 600;
+          font-size: 15px;
+          color: #4A5568;
+          margin-bottom: 12px;
+        }
+        
         .info-item {
-          margin-bottom: 5px;
+          display: flex;
+          
+          margin-bottom: 8px;
           font-size: 14px;
         }
-        .separator {
-          border-top: 1px solid #ddd;
-          margin: 15px 0;
+        
+        .info-label {
+          color: #718096;
         }
-        .table-container {
+        
+        .info-value {
+          margin-left: 5px;
+          font-weight: 500;
+          color: #2D3748;
+        }
+        
+        .earnings-deductions {
+          margin-bottom: 25px;
+        }
+        
+        .section-title {
+          font-size: 16px;
+          font-weight: 600;
+          color: #2D3748;
           margin-bottom: 15px;
         }
+        
+        .tables-container {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 25px;
+        }
+        
+        .table-section {
+          background-color: #F8FAFC;
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        
         table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 15px;
-          border: 1px solid #ddd;
         }
+        
         thead {
-          background-color: #f5f5f5;
+          background-color: #EDF2F7;
         }
-        th, td {
-          padding: 10px;
-          text-align: left;
-          border-bottom: 1px solid #ddd;
-          border-right: 1px solid #ddd;
-          font-size: 14px;
-        }
-        th:last-child, td:last-child {
-          border-right: none;
-        }
+        
         th {
-          font-weight: bold;
-          color: #555;
+          text-align: left;
+          padding: 12px 15px;
+          font-size: 14px;
+          font-weight: 600;
+          color: #4A5568;
+          border-bottom: 1px solid #E2E8F0;
         }
+        
+        td {
+          padding: 12px 15px;
+          font-size: 14px;
+          border-bottom: 1px solid #E2E8F0;
+        }
+        
+        tr:last-child td {
+          border-bottom: none;
+        }
+        
         .text-right {
           text-align: right;
         }
+        
         .total-row {
-          font-weight: bold;
-          background-color: #f9f9f9;
+          font-weight: 600;
+          background-color: #EDF2F7;
         }
-        .tables-container {
-          display: flex;
-          gap: 20px;
-        }
-        .table-section {
-          flex: 1;
-          border-bottom: 1px solid #0052cc;
-        }
+        
         .footer {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-top: 20px;
-          padding-top: 15px;
-          border-top: 2px solid #0052cc;
-        }
-        .footer-label {
-          font-size: 16px;
-          font-weight: bold;
-        }
-        .total-amount {
-          font-size: 20px;
-          font-weight: bold;
-          color: #0052cc;
-        }
-        .calculation {
-          font-size: 14px;
-          color: #555;
+          padding: 20px;
+          background-color: #F8FAFC;
+          border-radius: 8px;
           margin-top: 5px;
         }
-        .row {
-          display: flex;
+        
+        .footer-label {
+          font-size: 15px;
+          font-weight: 500;
+          color: #4A5568;
         }
-        .payslip-logo {
-          text-align: center;
-          margin-bottom: 10px;
+        
+        .total-amount {
+          font-size: 22px;
+          font-weight: 700;
+          color: #1E40AF;
         }
+        
+        .calculation {
+          font-size: 13px;
+          color: #718096;
+          margin-top: 5px;
+        }
+        
         .watermark {
-          position: fixed;
+          position: absolute;
           top: 50%;
           left: 50%;
           transform: translate(-50%, -50%) rotate(-45deg);
-          font-size: 100px;
-          color: rgba(0, 0, 0, 0.05);
-          z-index: -1;
+          font-size: 150px;
+          color: rgba(203, 213, 224, 0.15);
+          font-weight: 700;
+          white-space: nowrap;
+          z-index: 0;
+          pointer-events: none;
+        }
+        
+        .document-footer {
+          margin-top: 30px;
+          text-align: center;
+          font-size: 12px;
+          color: #A0AEC0;
+          padding-bottom: 15px;
         }
       </style>
     </head>
@@ -260,87 +371,111 @@ export default function PayslipDetailPage({ params }: PayslipDetailPageProps) {
 
         printWindow.document.write(`
         <div class="payslip">
-          <div class="watermark">COPY</div>
+          <div class="brand-accent"></div>
+          <div class="watermark">PAYSLIP</div>
+          
           <div class="header">
-            <div>
-              <div class="company-name">ZAMBIAN WILA MOTORS</div>
+            <div class="company-info">
+              <div class="company-logo">ZWM</div>
+              <div>
+                <div class="company-name">ZAMBIAN WILA MOTORS</div>
+              </div>
             </div>
-            <div>
+            <div class="payslip-meta">
               <div class="payslip-title">PAYSLIP</div>
               <div class="payslip-period">
-                Period: ${formatDate(payslip.payPeriod.startDate)} - ${formatDate(payslip.payPeriod.endDate)}<br>
-                Payment Date: ${formatDate(payslip.payPeriod.paymentDate)}
+                Pay Period: ${formatDate(payslip?.period)}<br>
+                Payment Date: ${formatDate(payslip.payPeriod.endDate)}
               </div>
             </div>
           </div>
-
+  
           <div class="info-section">
-            <div class="info-column">
+            <div class="info-card">
               <div class="info-title">Employee Information</div>
-              <div class="info-item">Name: ${payslip.employee.name}</div>
-              <div class="info-item">Department: ${payslip.employee.department}</div>
-              <div class="info-item">Employee ID: ${payslip.employee.id || 'N/A'}</div>
+              <div class="info-item">
+                <span class="info-label">Employee Name: </span>
+                <span class="info-value"> ${payslip.employee.name}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">NRC: </span>
+                <span class="info-value"> ${payslip.employee.nrc}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Department:</span>
+                <span class="info-value">${payslip.employee.department}</span>
+              </div>
+              <div class="info-item">
+                
+              </div>
             </div>
-            <div class="info-column">
+            
+            <div class="info-card">
               <div class="info-title">Payment Information</div>
-              <div class="info-item">Basic Salary: ${formatCurrency(payslip.salary.basicSalary)}</div>
-              <div class="info-item">Net Salary: ${formatCurrency(payslip.salary.netSalary)}</div>
-              <div class="info-item">Payment Method: Bank Transfer</div>
+              <div class="info-item">
+                <span class="info-label">Net Salary:</span>
+                <span class="info-value">${formatCurrency(payslip.salary.netSalary)}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Payment Method:</span>
+                <span class="info-value">Bank Transfer</span>
+              </div>
             </div>
           </div>
-
-          <div class="info-title">Earnings & Deductions</div>
-          <div class="tables-container">
-            <div class="table-section">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Earnings</th>
-                    <th class="text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Basic Salary</td>
-                    <td class="text-right">${formatCurrency(payslip.salary.basicSalary)}</td>
-                  </tr>
-                  ${payslip.salary?.allowances?.map((allowance: { id: string; name: string; calculatedAmount: number }) => `
+          <div class="earnings-deductions">
+            <div class="section-title">Earnings & Deductions</div>
+            <div class="tables-container">
+              <div class="table-section">
+                <table>
+                  <thead>
                     <tr>
-                      <td>${allowance.name}</td>
-                      <td class="text-right">${formatCurrency(allowance.calculatedAmount)}</td>
+                      <th>Earnings</th>
+                      <th class="text-right">Amount</th>
                     </tr>
-                  `).join('')}
-                  <tr class="total-row">
-                    <td>Total Earnings</td>
-                    <td class="text-right">${formatCurrency(payslip.salary.grossSalary)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="table-section">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Deductions</th>
-                    <th class="text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${payslip.salary?.deductions?.map((deduction: { id: string; name: string; calculatedAmount: number }) => `
+                  </thead>
+                  <tbody>
                     <tr>
-                      <td>${deduction.name}</td>
-                      <td class="text-right">${formatCurrency(deduction.calculatedAmount)}</td>
+                      <td>Basic Salary</td>
+                      <td class="text-right">${formatCurrency(payslip.salary.basicSalary)}</td>
                     </tr>
-                  `).join('')}
-                  <tr class="total-row">
-                    <td>Total Deductions</td>
-                    <td class="text-right">${formatCurrency(payslip.salary.totalDeductions)}</td>
-                  </tr>
-                </tbody>
-              </table>
+                    ${payslip.salary?.allowances?.map((allowance) => `
+                      <tr>
+                        <td>${allowance.name}</td>
+                        <td class="text-right">${formatCurrency(allowance.calculatedAmount)}</td>
+                      </tr>
+                    `).join('')}
+                    <tr class="total-row">
+                      <td>Total Earnings</td>
+                      <td class="text-right">${formatCurrency(payslip.salary.grossSalary)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="table-section">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Deductions</th>
+                      <th class="text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${payslip.salary?.deductions?.map((deduction) => `
+                      <tr>
+                        <td>${deduction.name}</td>
+                        <td class="text-right">${formatCurrency(deduction.calculatedAmount)}</td>
+                      </tr>
+                    `).join('')}
+                    <tr class="total-row">
+                      <td>Total Deductions</td>
+                      <td class="text-right">${formatCurrency(payslip.salary.totalDeductions)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-
+  
           <div class="footer">
             <div>
               <div class="footer-label">Net Pay:</div>
@@ -348,11 +483,14 @@ export default function PayslipDetailPage({ params }: PayslipDetailPageProps) {
             </div>
             <div class="total-amount">${formatCurrency(payslip.salary.netSalary)}</div>
           </div>
+          
+          <div class="document-footer">
+            This is a computer-generated document and does not require a signature.
+          </div>
         </div>
       `);
       }
     });
-
     // Close the HTML document
     printWindow.document.write(`
     </body>
@@ -382,11 +520,35 @@ export default function PayslipDetailPage({ params }: PayslipDetailPageProps) {
     try {
       setEmailStatus("sending")
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      const pdfBlobs = await generatePayslipPDFs(payslips)
+
+      if (!payslips) return;
+
+      const results = await Promise.all(
+        payslips.map(async (payslip, index) => {
+          const pdfBlob = pdfBlobs[index];
+          const base64Pdf = await blobToBase64(pdfBlob);
+
+          console.log(payslip.employee.email)
+          const response = await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: payslip.employee.email,
+              name: payslip.employee.name,
+              period: formatDate(payslip.period),
+              pdfData: base64Pdf
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to send email');
+          }
+          return response.json();
+        })
+      );
 
       setEmailStatus("success")
-
       // Reset after showing success message
       setTimeout(() => {
         setEmailDialogOpen(false)
@@ -397,7 +559,6 @@ export default function PayslipDetailPage({ params }: PayslipDetailPageProps) {
       setEmailStatus("error")
     }
   }
-
   // Status badge component
   const StatusBadge = ({ status }: { status: string }) => {
     const statusMap: Record<string, { label: string, variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -452,7 +613,6 @@ export default function PayslipDetailPage({ params }: PayslipDetailPageProps) {
       </div>
     )
   }
-
   return (
     <div className="container mx-auto py-6 space-y-8">
       <div className="flex justify-between items-center">
@@ -538,15 +698,19 @@ export default function PayslipDetailPage({ params }: PayslipDetailPageProps) {
             <CardContent className="space-y-4">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Period:</span>
-                <span className="font-medium">{payslips[0].payPeriod.startDate}</span>
+                <span className="font-medium">{payslips[0].period}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Payment Date:</span>
-                <span className="font-medium">{formatDate(payslips[0].payPeriod.paymentDate)}</span>
+                <span className="font-medium">{formatDate(payslips[0].payPeriod.endDate)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Status:</span>
                 <StatusBadge status={payslips[0].status} />
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Leave Days YTD:</span>
+                <span className="font-medium">{leaveDaysYTD !== null ? leaveDaysYTD : "-"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Total Amount:</span>
@@ -606,7 +770,7 @@ export default function PayslipDetailPage({ params }: PayslipDetailPageProps) {
                 <div className="text-right">
                   <h3 className="text-xl font-semibold">PAYSLIP</h3>
                   <p>Period: {formatDate(payslip.payPeriod.startDate)} - {formatDate(payslip.payPeriod.endDate)}</p>
-                  <p>Payment Date: {formatDate(payslip.payPeriod.paymentDate)}</p>
+                  <p>Payment Date: {formatDate(payslip.payPeriod.endDate)}</p>
                 </div>
               </div>
 
@@ -618,6 +782,10 @@ export default function PayslipDetailPage({ params }: PayslipDetailPageProps) {
                     <h4 className="font-semibold mb-2">Employee Information</h4>
                     <p>Name: {payslip.employee.name}</p>
                     <p>Department: {payslip.employee.department}</p>
+                    <div className="mt-2 pt-2 border-t">
+                      <p className="text-sm text-muted-foreground">Leave Days YTD: {leaveDaysYTD !== null ? leaveDaysYTD : "-"}</p>
+                      <p className="text-sm text-muted-foreground">Gross Pay YTD: {grossPayYTD !== null ? formatCurrency(grossPayYTD) : "-"}</p>
+                    </div>
                   </div>
                   <div>
                     <h4 className="font-semibold mb-2">Payment Information</h4>

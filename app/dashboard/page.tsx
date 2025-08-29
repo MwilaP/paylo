@@ -29,7 +29,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
@@ -78,7 +78,7 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground">No upcoming payroll scheduled</p>
           </CardContent>
         </Card>
-      </div>
+      </div> */}
 
       <Card className="mt-6">
         <CardHeader className="flex flex-row items-center justify-between">
@@ -143,7 +143,7 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="overview" className="mt-6">
+      {/* <Tabs defaultValue="overview" className="mt-6">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="employees">Recent Employees</TabsTrigger>
@@ -158,7 +158,7 @@ export default function DashboardPage() {
         <TabsContent value="payroll" className="space-y-4">
           <UpcomingPayroll />
         </TabsContent>
-      </Tabs>
+      </Tabs> */}
     </div>
   )
 }

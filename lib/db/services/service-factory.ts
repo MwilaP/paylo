@@ -90,6 +90,21 @@ const mockPayrollStructureService = {
   },
 }
 
+const mockPayslipService = {
+  getCurrentPayslip: async () => {
+    console.warn("Using mock payslip service: getCurrentPayslip")
+    return null
+  },
+  generatePayslipPDF: async () => {
+    console.warn("Using mock payslip service: generatePayslipPDF")
+    return null
+  },
+  getPayslipHistory: async () => {
+    console.warn("Using mock payslip service: getPayslipHistory")
+    return []
+  },
+}
+
 const mockPayrollHistoryService = {
   createPayrollRecord: async () => {
     console.warn("Using mock payroll history service: createPayrollRecord")

@@ -290,7 +290,6 @@ export default function PayslipManagementPage() {
                       onCheckedChange={handleSelectAll}
                     />
                   </TableHead>
-                  <TableHead>Employee</TableHead>
                   <TableHead>Period</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
@@ -320,9 +319,6 @@ export default function PayslipManagementPage() {
                           onCheckedChange={(checked) => handleSelectPayslip(record._id, !!checked)}
                         />
                       </TableCell>
-                      <TableCell>
-                        {record.items.length > 0 ? record.items[0].employeeName : "N/A"}
-                      </TableCell>
                       <TableCell>{record.period}</TableCell>
                       <TableCell>{new Date(record.date).toLocaleDateString()}</TableCell>
                       <TableCell className="text-right">{formatCurrency(record.totalAmount)}</TableCell>
@@ -332,7 +328,7 @@ export default function PayslipManagementPage() {
                       <TableCell>
                         <div className="flex justify-center gap-2">
                           <Link href={`/payslip/${record._id}`}>
-                            335                               <Button variant="ghost" size="sm">
+                            <Button variant="ghost" size="sm">
                               View
                             </Button>
                           </Link>

@@ -103,13 +103,13 @@ export function PayrollStructureSummary({
           <div className="space-y-2">
             <div className="flex justify-between">
               <span className="text-sm">Basic Salary</span>
-              <span className="font-medium">${basicSalary.toLocaleString()}</span>
+              <span className="font-medium">ZMW{basicSalary.toLocaleString()}</span>
             </div>
             {allowances.length > 0 && (
               <div className="space-y-1">
                 <div className="flex justify-between text-sm font-medium">
                   <span>Allowances</span>
-                  <span>${totalAllowances.toLocaleString()}</span>
+                  <span>ZMW{totalAllowances.toLocaleString()}</span>
                 </div>
                 {allowances.map((allowance) => {
                   const amount = allowance.type === "fixed" ? allowance.value : (allowance.value / 100) * basicSalary
@@ -118,7 +118,7 @@ export function PayrollStructureSummary({
                       <span>
                         {allowance.name || "Unnamed"} {allowance.type === "percentage" && `(${allowance.value}%)`}
                       </span>
-                      <span>${amount.toLocaleString()}</span>
+                      <span>ZMW{amount.toLocaleString()}</span>
                     </div>
                   )
                 })}
@@ -128,14 +128,14 @@ export function PayrollStructureSummary({
 
           <div className="flex justify-between border-t border-b py-2 font-medium">
             <span>Gross Pay</span>
-            <span>${grossPay.toLocaleString()}</span>
+            <span>ZMW{grossPay.toLocaleString()}</span>
           </div>
 
           {deductions.length > 0 && (
             <div className="space-y-2">
               <div className="flex justify-between text-sm font-medium">
                 <span>Deductions</span>
-                <span>-${totalDeductions.toLocaleString()}</span>
+                <span>-ZMW{totalDeductions.toLocaleString()}</span>
               </div>
               {deductions
                 .filter((deduction) => deduction.preTax)
@@ -147,7 +147,7 @@ export function PayrollStructureSummary({
                         {deduction.name || "Unnamed"} {deduction.type === "percentage" && `(${deduction.value}%)`}
                         <span className="ml-1 text-xs">(Pre-Tax)</span>
                       </span>
-                      <span>-${amount.toLocaleString()}</span>
+                      <span>-ZMW {amount.toLocaleString()}</span>
                     </div>
                   )
                 })}
@@ -161,7 +161,7 @@ export function PayrollStructureSummary({
                         {deduction.name || "Unnamed"} {deduction.type === "percentage" && `(${deduction.value}%)`}
                         <span className="ml-1 text-xs">(Post-Tax)</span>
                       </span>
-                      <span>-${amount.toLocaleString()}</span>
+                      <span>-ZMW{amount.toLocaleString()}</span>
                     </div>
                   )
                 })}
@@ -171,24 +171,24 @@ export function PayrollStructureSummary({
           <div className="rounded-md bg-muted p-4">
             <div className="flex justify-between font-bold">
               <span>Net Pay ({formatFrequency(frequency)})</span>
-              <span className="text-xl">${netPay.toLocaleString()}</span>
+              <span className="text-xl">ZMW{netPay.toLocaleString()}</span>
             </div>
             {frequency === "monthly" && (
               <div className="mt-2 flex justify-between text-sm text-muted-foreground">
                 <span>Annual</span>
-                <span>${(netPay * 12).toLocaleString()}</span>
+                <span>ZMW{(netPay * 12).toLocaleString()}</span>
               </div>
             )}
             {frequency === "biweekly" && (
               <div className="mt-2 flex justify-between text-sm text-muted-foreground">
                 <span>Annual (26 pay periods)</span>
-                <span>${(netPay * 26).toLocaleString()}</span>
+                <span>ZMW{(netPay * 26).toLocaleString()}</span>
               </div>
             )}
             {frequency === "weekly" && (
               <div className="mt-2 flex justify-between text-sm text-muted-foreground">
                 <span>Annual (52 pay periods)</span>
-                <span>${(netPay * 52).toLocaleString()}</span>
+                <span>ZMW{(netPay * 52).toLocaleString()}</span>
               </div>
             )}
           </div>

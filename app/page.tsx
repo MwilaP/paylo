@@ -49,7 +49,7 @@ export default function Home() {
       </section>
 
       {/* Testimonials Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-muted">
+      {/* <section className="py-20 px-4 sm:px-6 lg:px-8 bg-muted">
         <div className="max-w-7xl mx-auto">
           <h2 className="text-3xl font-bold text-center mb-12">Trusted by Businesses</h2>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -79,7 +79,7 @@ export default function Home() {
             </Card>
           </div>
         </div>
-      </section>
+      </section> */}
     </main>
   )
 }

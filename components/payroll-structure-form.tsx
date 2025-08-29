@@ -21,6 +21,7 @@ import {
   PayrollStructureDocument
 } from "@/lib/services/payroll-structure-service"
 import { initializeDatabase } from "@/lib/db/db-service"
+import { calculateTaxDeduction, calculateNapsaContribution } from "@/lib/utils/payroll-calculations"
 
 interface Allowance {
   id: string
@@ -57,7 +58,20 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
     { id: "1", name: "Housing", type: "percentage", value: 20 },
   ])
   const [deductions, setDeductions] = useState<Deduction[]>([
-    { id: "1", name: "Tax", type: "percentage", value: 10, preTax: true },
+    {
+      id: "1",
+      name: "PAYE",
+      type: "fixed",
+      value: 0,
+      preTax: true
+    },
+    {
+      id: "2",
+      name: "NAPSA",
+      type: "percentage",
+      value: 0,
+      preTax: true
+    },
   ])
 
   // Initialize database
@@ -86,6 +100,54 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
     initDb();
   }, [toast]);
 
+  // Update tax deduction when salary or allowances change
+  useEffect(() => {
+    if (basicSalary > 0) {
+      // Calculate total allowances
+      const totalAllowances = allowances.reduce((total, allowance) => {
+        if (allowance.type === 'fixed') {
+          return total + allowance.value;
+        }
+        return total + (basicSalary * allowance.value) / 100;
+      }, 0);
+
+      const grossPay = basicSalary + totalAllowances;
+      const tax = calculateTaxDeduction(grossPay);
+      const napsa = calculateNapsaContribution(grossPay);
+      const totalDeduction = tax
+
+      setDeductions(prev => {
+        const otherDeductions = prev.filter(d => d.id !== "2");
+        return [
+          {
+            id: "2",
+            name: "NAPSA",
+            type: "fixed",
+            value: parseFloat(napsa.toFixed(2)),
+            preTax: true
+          },
+          ...otherDeductions
+        ];
+      });
+
+
+
+      setDeductions(prev => {
+        const otherDeductions = prev.filter(d => d.id !== "1");
+        return [
+          {
+            id: "1",
+            name: "PAYE",
+            type: "fixed",
+            value: parseFloat(totalDeduction.toFixed(2)),
+            preTax: true
+          },
+          ...otherDeductions
+        ];
+      });
+    }
+  }, [basicSalary, allowances]);
+
   // Load data if editing
   useEffect(() => {
     if (isEditing && dbInitialized) {
@@ -93,7 +155,7 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
         try {
           setIsLoading(true);
           const structure = await getPayrollStructure(id);
-          
+
           if (structure) {
             setName(structure.name);
             setDescription(structure.description || "");
@@ -156,7 +218,7 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validate form
     if (!name.trim()) {
       toast({
@@ -200,7 +262,7 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
 
     try {
       setIsLoading(true);
-      
+
       const payrollStructureData = {
         name,
         description,
@@ -209,7 +271,7 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
         allowances,
         deductions
       };
-      
+
       if (isEditing) {
         // Update existing structure
         await updatePayrollStructure(id, payrollStructureData);
@@ -228,7 +290,7 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
           description: "The payroll structure has been created successfully.",
         });
       }
-      
+
       router.push("/payroll/structures");
     } catch (error) {
       console.error("Error saving payroll structure:", error);
@@ -370,7 +432,7 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
                           {allowance.type === "percentage" ? "%" : "$"}
                         </span>
                         <Input
-                          id={`allowance-value-${allowance.id}`}
+                          id={`allowance-value-$F{allowance.id}`}
                           type="number"
                           placeholder="0"
                           className="pl-8"
@@ -394,7 +456,7 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
                     </div>
                     {allowance.type === "percentage" && basicSalary > 0 && allowance.value > 0 && (
                       <div className="col-span-full text-sm text-muted-foreground">
-                        Preview: {allowance.name} = {allowance.value}% of ${basicSalary.toLocaleString()} = $
+                        Preview: {allowance.name} = {allowance.value}% of ZMW{basicSalary.toLocaleString()} = ZMW
                         {((allowance.value / 100) * basicSalary).toLocaleString()}
                       </div>
                     )}
@@ -497,7 +559,7 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
                     </div>
                     {deduction.type === "percentage" && basicSalary > 0 && deduction.value > 0 && (
                       <div className="col-span-full text-sm text-muted-foreground">
-                        Preview: {deduction.name} = {deduction.value}% of ${basicSalary.toLocaleString()} = $
+                        Preview: {deduction.name} = {deduction.value}% of K{basicSalary.toLocaleString()} = K
                         {((deduction.value / 100) * basicSalary).toLocaleString()}
                       </div>
                     )}

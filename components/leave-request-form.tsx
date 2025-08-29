@@ -54,11 +54,26 @@ interface Employee {
 
 interface LeaveRequestFormProps {
   employee: Employee
-  onSubmit: (data: z.infer<typeof formSchema>) => Promise<void>
+  onSubmit: (data: z.infer<typeof formSchema>) => Promise<{
+    _id: string
+    startDate: string
+    endDate: string
+    leaveType: 'annual' | 'sick' | 'maternity' | 'paternity' | 'unpaid' | 'other'
+    status: 'pending' | 'approved' | 'rejected'
+    reason?: string
+  }>
+  onSuccess?: (newLeave: {
+    _id: string
+    startDate: string
+    endDate: string
+    leaveType: 'annual' | 'sick' | 'maternity' | 'paternity' | 'unpaid' | 'other'
+    status: 'pending' | 'approved' | 'rejected'
+    reason?: string
+  }) => void
   onCancel: () => void
 }
 
-export function LeaveRequestForm({ onSubmit, onCancel }: LeaveRequestFormProps) {
+export function LeaveRequestForm({ employee, onSubmit, onSuccess, onCancel }: LeaveRequestFormProps) {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -71,9 +86,18 @@ export function LeaveRequestForm({ onSubmit, onCancel }: LeaveRequestFormProps) 
 
   const handleSubmit = async (data: z.infer<typeof formSchema>) => {
     try {
+      console.log("Submiting")
       setIsSubmitting(true)
-      await onSubmit(data)
+      const result = await onSubmit(data)
+      if (onSuccess) {
+        onSuccess(result)
+        setIsSubmitting(true)
+
+
+      }
+
     } catch (error) {
+      console.log(error)
       toast({
         title: "Error",
         description: "Failed to submit leave request",

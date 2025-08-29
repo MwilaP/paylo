@@ -32,7 +32,7 @@ const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
 // Define error types
 export class PayrollError extends Error {
   currentStatus?: string;
-  
+
   constructor(message: string) {
     super(message);
     this.name = "PayrollError";
@@ -53,7 +53,7 @@ const validateStatusTransition = (currentStatus: string, targetStatus: string): 
   if (!VALID_STATUS_TRANSITIONS.hasOwnProperty(currentStatus)) {
     throw new PayrollError(`Invalid current status: ${currentStatus}`);
   }
-  
+
   // Check if the transition is allowed
   const allowedTransitions = VALID_STATUS_TRANSITIONS[currentStatus as keyof typeof VALID_STATUS_TRANSITIONS];
   if (!allowedTransitions.includes(targetStatus)) {
@@ -66,7 +66,7 @@ const validateStatusTransition = (currentStatus: string, targetStatus: string): 
 // Helper function to log transactions
 const logTransaction = async (db: any, payrollId: string, action: string, description: string, details?: any): Promise<void> => {
   if (!db) return;
-  
+
   try {
     const logEntry = {
       _id: `log_${uuidv4()}`,
@@ -77,7 +77,7 @@ const logTransaction = async (db: any, payrollId: string, action: string, descri
       details: details || {},
       timestamp: new Date().toISOString(),
     };
-    
+
     await dbOperations.create(db, logEntry);
   } catch (error) {
     console.error(`Error logging transaction for payroll ${payrollId}:`, error);
@@ -145,7 +145,7 @@ export const payrollHistoryService = (db: any) => ({
         if (!currentRecord) {
           throw new PayrollError(`Payroll record with ID ${id} not found`);
         }
-        
+
         // Validate status transition
         validateStatusTransition(currentRecord.status, updates.status);
       }
@@ -349,7 +349,7 @@ export const payrollHistoryService = (db: any) => ({
       validateStatusTransition(currentRecord.status, "cancelled");
 
       const now = new Date().toISOString();
-      
+
       // Properly append cancel notes to existing notes
       const existingNotes = currentRecord.notes || "";
       const updatedNotes = existingNotes
@@ -392,11 +392,18 @@ export const payrollHistoryService = (db: any) => ({
         throw new PayrollError(`Payroll history with ID ${payrollHistoryId} not found`);
       }
 
-      // 2. Get all employees (using service factory)
+      // 2. Get all employees and filter to those in payroll history items
       const employeeService = await getEmployeeService();
-      const employees = await employeeService.getAllEmployees();
-      if (!employees || employees.length === 0) {
-        throw new PayrollError("No employees found for payroll");
+      const allEmployees = await employeeService.getAllEmployees();
+      if (!allEmployees || allEmployees.length === 0) {
+        throw new PayrollError("No employees found in system");
+      }
+
+      // Filter to only employees in this payroll history
+      const employeeIdsInPayroll = new Set(payrollHistory.items.map((item: { employeeId: string }) => item.employeeId));
+      const employees = allEmployees.filter((emp: { _id: string }) => employeeIdsInPayroll.has(emp._id));
+      if (employees.length === 0) {
+        throw new PayrollError("No matching employees found between system and payroll history");
       }
 
       // 3. Get payroll structure service
@@ -404,7 +411,7 @@ export const payrollHistoryService = (db: any) => ({
 
       // 4. Process each employee to generate payslip
       const payslips: Payslip[] = [];
-      
+
       for (const employee of employees) {
         try {
           // Skip if employee has no payroll structure
@@ -437,12 +444,15 @@ export const payrollHistoryService = (db: any) => ({
               position: employee.designation || '',
               department: employee.department || '',
               employeeNumber: employee._id,
+              nrc: employee.nationalId,
+              email: employee.email,
             },
             payPeriod: {
               startDate: payrollHistory.date,
               endDate: payrollHistory.date, // Same as start date for now
               paymentDate: new Date().toISOString(),
             },
+            period: payrollHistory.period,
             salary: salaryBreakdown,
             payrollStructure: {
               _id: payrollStructure._id,
@@ -481,7 +491,7 @@ export const payrollHistoryService = (db: any) => ({
       // Get all records to validate status
       const payrolls = await Promise.all(ids.map((id) => this.getPayrollRecordById(id)));
       const validPayrolls = payrolls.filter((payroll): payroll is PayrollHistory => payroll !== null);
-      
+
       // Validate status transitions for all payrolls
       validPayrolls.forEach(payroll => {
         try {
@@ -501,13 +511,13 @@ export const payrollHistoryService = (db: any) => ({
       }));
 
       const result = await dbOperations.bulkDocs(db, updatedPayrolls);
-      
+
       // Log transactions for each payroll
       await Promise.all(updatedPayrolls.map(payroll =>
         logTransaction(db, payroll._id, "bulk-process", `Payroll status changed from ${payroll.status} to processing`,
           { processedBy: processedBy || "System" })
       ));
-      
+
       return result;
     } catch (error: any) {
       console.error(`Error bulk processing payroll records:`, error);

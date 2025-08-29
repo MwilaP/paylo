@@ -324,7 +324,7 @@ export function EmployeeProfile({ id }: { id: string }) {
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground">Employee ID</h3>
-                  <p>EMP-{employee._id.substring(employee._id.length - 5).toUpperCase()}</p> {/* Use _id */}
+                  <p>ZWM-{employee._id.substring(employee._id.length - 5).toUpperCase()}</p> {/* Use _id */}
                 </div>
               </div>
               <div>

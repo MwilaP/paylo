@@ -7,7 +7,7 @@ import { PayrollHistory } from "../services/payroll-history.service";
 export interface SalaryBreakdown {
   /** Basic salary amount */
   basicSalary: number;
-  
+
   /** List of allowances with calculated amounts */
   allowances: Array<{
     id: string;
@@ -16,7 +16,7 @@ export interface SalaryBreakdown {
     value: number;
     calculatedAmount: number;
   }>;
-  
+
   /** List of deductions with calculated amounts */
   deductions: Array<{
     id: string;
@@ -26,19 +26,19 @@ export interface SalaryBreakdown {
     preTax: boolean;
     calculatedAmount: number;
   }>;
-  
+
   /** Total of all allowances */
   totalAllowances: number;
-  
+
   /** Total of all deductions */
   totalDeductions: number;
-  
+
   /** Gross salary (basic + allowances) */
   grossSalary: number;
-  
+
   /** Net salary (gross - deductions) */
   netSalary: number;
-  
+
   /** Tax amount if applicable */
   tax?: number;
 }
@@ -49,19 +49,21 @@ export interface SalaryBreakdown {
 export interface PayslipEmployeeInfo {
   /** Employee ID */
   id: string;
-  
+
   /** Full name */
   name: string;
-  
+
   /** Employee position/title */
   position: string;
-  
+
   /** Department */
   department: string;
-  
+
   /** Employee number/ID */
   employeeNumber: string;
-  
+  nrc: string;
+  email: string;
+
   /** Bank account details */
   bankDetails?: {
     accountNumber: string;
@@ -76,39 +78,41 @@ export interface PayslipEmployeeInfo {
 export interface Payslip {
   /** Unique payslip ID */
   _id: string;
-  
+
   /** Revision ID for database */
   _rev?: string;
-  
+
   /** Reference to payroll history record */
   payrollHistoryId: string;
-  
+
   /** Employee information */
   employee: PayslipEmployeeInfo;
-  
+
   /** Pay period information */
   payPeriod: {
     startDate: string;
     endDate: string;
     paymentDate: string;
   };
-  
+
+  period: string;
+
   /** Salary breakdown */
   salary: SalaryBreakdown;
-  
+
   /** Payroll structure used */
   payrollStructure: Pick<PayrollStructure, '_id' | 'name' | 'frequency'>;
-  
+
   /** Status of the payslip */
   status: 'generated' | 'approved' | 'paid' | 'cancelled';
-  
+
   /** Metadata */
   createdAt: string;
   updatedAt?: string;
   approvedAt?: string;
   paidAt?: string;
   cancelledAt?: string;
-  
+
   /** Additional notes */
   notes?: string;
 }
@@ -118,7 +122,7 @@ export interface Payslip {
  */
 export const createNewPayslip = (data: Partial<Payslip>): Payslip => {
   const now = new Date().toISOString();
-  
+
   const defaultPayslip: Partial<Payslip> = {
     _id: `payslip_${Date.now()}`,
     status: 'generated',
@@ -164,8 +168,8 @@ export const calculateSalaryBreakdown = (
     name: allowance.name,
     type: allowance.type,
     value: allowance.value,
-    calculatedAmount: allowance.type === 'fixed' 
-      ? allowance.value 
+    calculatedAmount: allowance.type === 'fixed'
+      ? allowance.value
       : (basicSalary * allowance.value) / 100
   }));
 

@@ -438,16 +438,16 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
                   <SelectTrigger id="department">
                     <SelectValue placeholder="Select department" />
                   </SelectTrigger>
-                  {/* <SelectContent>
+                  <SelectContent>
                     <SelectItem value="engineering">Engineering</SelectItem>
                     <SelectItem value="marketing">Marketing</SelectItem>
                     <SelectItem value="finance">Finance</SelectItem>
                     <SelectItem value="hr">Human Resources</SelectItem>
-                    <SelectItem value="product">Product</SelectItem>
+                    <SelectItem value="production">Production</SelectItem>
                     <SelectItem value="design">Design</SelectItem>
                     <SelectItem value="sales">Sales</SelectItem>
                     <SelectItem value="support">Support</SelectItem>
-                  </SelectContent> */}
+                  </SelectContent>
                 </Select>
               </div>
 
@@ -692,7 +692,6 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
                     </SelectContent>
                   </Select>
                 </div>
-
                 {selectedStructure && (
                   <div className="rounded-md border p-4 mt-4">
                     <h3 className="font-medium mb-2">Structure Preview</h3>

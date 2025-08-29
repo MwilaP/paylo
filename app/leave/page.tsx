@@ -62,6 +62,9 @@ export default function LeavePage() {
     endDate: Date;
     reason?: string;
   }) => {
+    if (!employee) {
+      throw new Error("Employee data not loaded")
+    }
     try {
       // Get employee ID from name
       const empService = await getEmployeeService()
@@ -82,8 +85,8 @@ export default function LeavePage() {
 
       const service = await leaveRequestService
       const newRequest = await service.create({
-        employeeId: employees[0]._id,
-        employeeName: formData.employeeName,
+        employeeId: employee._id,
+        employeeName: `${employee.firstName} ${employee.lastName}`,
         leaveType: formData.leaveType as LeaveRequest['leaveType'],
         startDate: formData.startDate.toISOString(),
         endDate: formData.endDate.toISOString(),
@@ -99,12 +102,21 @@ export default function LeavePage() {
         title: "Leave request submitted",
         description: "Your request has been received.",
       })
+      return {
+        _id: newRequest._id,
+        startDate: newRequest.startDate,
+        endDate: newRequest.endDate,
+        leaveType: newRequest.leaveType,
+        status: newRequest.status,
+        reason: newRequest.reason
+      }
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Error submitting leave request",
         description: error instanceof Error ? error.message : "An unknown error occurred",
       })
+      throw error
     }
   }
 
@@ -133,6 +145,17 @@ export default function LeavePage() {
                 hireDate: employee.hireDate
               }}
               onSubmit={handleSubmit}
+              onSuccess={(newLeave) => {
+                setLeaveRequests([{
+                  ...newLeave,
+                  _rev: '', // Will be populated by PouchDB
+                  employeeId: employee._id,
+                  employeeName: `${employee.firstName} ${employee.lastName}`,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  reason: newLeave.reason || ''
+                } as LeaveRequest, ...leaveRequests])
+              }}
               onCancel={() => setShowForm(false)}
             />
           ) : (
