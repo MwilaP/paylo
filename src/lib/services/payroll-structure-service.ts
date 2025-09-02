@@ -1,6 +1,6 @@
 "use client"
 
-import { DB_NAMES, getDatabases, dbOperations } from "@/lib/db/db-service";
+import { createSQLitePayrollStructureService } from "@/lib/db/sqlite-payroll-service";
 import { z } from "zod";
 
 // Define schemas for allowances and deductions
@@ -52,16 +52,17 @@ export async function createPayrollStructure(
     // Validate the data against the schema
     const validatedData = payrollStructureSchema.parse(data);
     
-    // Get the database instance
-    const { payrollStructures } = await getDatabases();
-    
-    if (!payrollStructures) {
-      console.error("Payroll structures database not available");
-      return null;
-    }
+    // Use SQLite service
+    const service = createSQLitePayrollStructureService();
     
     // Create the document
-    return await dbOperations.create(payrollStructures, validatedData) as PayrollStructureDocument;
+    const result = await service.create(validatedData);
+    return {
+      ...result,
+      _id: result.id,
+      createdAt: result.created_at,
+      updatedAt: result.updated_at
+    } as PayrollStructureDocument;
   } catch (error) {
     console.error("Error creating payroll structure:", error);
     return null;
@@ -73,16 +74,19 @@ export async function getPayrollStructure(
   id: string
 ): Promise<PayrollStructureDocument | null> {
   try {
-    // Get the database instance
-    const { payrollStructures } = await getDatabases();
-    
-    if (!payrollStructures) {
-      console.error("Payroll structures database not available");
-      return null;
-    }
+    // Use SQLite service
+    const service = createSQLitePayrollStructureService();
     
     // Get the document
-    return await dbOperations.getById(payrollStructures, id) as PayrollStructureDocument;
+    const result = await service.getById(id);
+    if (!result) return null;
+    
+    return {
+      ...result,
+      _id: result.id,
+      createdAt: result.created_at,
+      updatedAt: result.updated_at
+    } as PayrollStructureDocument;
   } catch (error) {
     console.error(`Error getting payroll structure with ID ${id}:`, error);
     return null;
@@ -98,16 +102,19 @@ export async function updatePayrollStructure(
     // Validate the updates against the schema
     const validatedUpdates = payrollStructureSchema.partial().parse(updates);
     
-    // Get the database instance
-    const { payrollStructures } = await getDatabases();
-    
-    if (!payrollStructures) {
-      console.error("Payroll structures database not available");
-      return null;
-    }
+    // Use SQLite service
+    const service = createSQLitePayrollStructureService();
     
     // Update the document
-    return await dbOperations.update(payrollStructures, id, validatedUpdates) as PayrollStructureDocument;
+    const result = await service.update(id, validatedUpdates);
+    if (!result) return null;
+    
+    return {
+      ...result,
+      _id: result.id,
+      createdAt: result.created_at,
+      updatedAt: result.updated_at
+    } as PayrollStructureDocument;
   } catch (error) {
     console.error(`Error updating payroll structure with ID ${id}:`, error);
     return null;
@@ -119,17 +126,11 @@ export async function deletePayrollStructure(
   id: string
 ): Promise<boolean> {
   try {
-    // Get the database instance
-    const { payrollStructures } = await getDatabases();
-    
-    if (!payrollStructures) {
-      console.error("Payroll structures database not available");
-      return false;
-    }
+    // Use SQLite service
+    const service = createSQLitePayrollStructureService();
     
     // Delete the document
-    const result = await dbOperations.delete(payrollStructures, id);
-    return result !== null;
+    return await service.delete(id);
   } catch (error) {
     console.error(`Error deleting payroll structure with ID ${id}:`, error);
     return false;
@@ -139,16 +140,17 @@ export async function deletePayrollStructure(
 // Get all payroll structures
 export async function getAllPayrollStructures(): Promise<PayrollStructureDocument[]> {
   try {
-    // Get the database instance
-    const { payrollStructures } = await getDatabases();
-    
-    if (!payrollStructures) {
-      console.error("Payroll structures database not available");
-      return [];
-    }
+    // Use SQLite service
+    const service = createSQLitePayrollStructureService();
     
     // Get all documents
-    return await dbOperations.getAll(payrollStructures) as PayrollStructureDocument[];
+    const results = await service.getAll();
+    return results.map(result => ({
+      ...result,
+      _id: result.id,
+      createdAt: result.created_at,
+      updatedAt: result.updated_at
+    })) as PayrollStructureDocument[];
   } catch (error) {
     console.error("Error getting all payroll structures:", error);
     return [];
@@ -160,17 +162,17 @@ export async function queryPayrollStructures(
   query: any
 ): Promise<PayrollStructureDocument[]> {
   try {
-    // Get the database instance
-    const { payrollStructures } = await getDatabases();
-    
-    if (!payrollStructures) {
-      console.error("Payroll structures database not available");
-      return [];
-    }
+    // Use SQLite service
+    const service = createSQLitePayrollStructureService();
     
     // Query documents
-    const result = await dbOperations.find(payrollStructures, query);
-    return result.docs as PayrollStructureDocument[];
+    const results = await service.query(query);
+    return results.map(result => ({
+      ...result,
+      _id: result.id,
+      createdAt: result.created_at,
+      updatedAt: result.updated_at
+    })) as PayrollStructureDocument[];
   } catch (error) {
     console.error("Error querying payroll structures:", error);
     return [];
@@ -181,40 +183,13 @@ export async function queryPayrollStructures(
 export function subscribeToPayrollStructureChanges(
   callback: (change: any) => void
 ) {
-  // This function will be implemented when we have the database instance
-  // For now, we'll return a mock changes object with a cancel method
+  // SQLite doesn't have real-time changes like PouchDB
+  // Return a mock changes object for compatibility
   const mockChanges = {
     cancel: () => {
-      console.log("Cancelled changes subscription");
+      console.log("Cancelled changes subscription (SQLite mode)");
     }
   };
-  
-  // Asynchronously set up the real changes listener
-  (async () => {
-    try {
-      const { payrollStructures } = await getDatabases();
-      
-      if (!payrollStructures) {
-        console.error("Payroll structures database not available");
-        return;
-      }
-      
-      // Set up the changes listener
-      const changes = payrollStructures.changes({
-        since: 'now',
-        live: true,
-        include_docs: true
-      });
-      
-      // Replace the mock cancel method with the real one
-      mockChanges.cancel = () => changes.cancel();
-      
-      // Set up the change handler
-      changes.on('change', callback);
-    } catch (error) {
-      console.error("Error setting up changes listener:", error);
-    }
-  })();
   
   return mockChanges;
 }

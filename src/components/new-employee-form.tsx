@@ -4,7 +4,10 @@ import type React from "react"
 
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { CalendarIcon, Upload } from "lucide-react"
+import { z } from "zod"
 
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
@@ -17,19 +20,116 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
+import { createSQLiteEmployeeService } from "@/lib/db/sqlite-employee-service"
+
+// Form validation schema
+const employeeFormSchema = z.object({
+  firstName: z.string().min(2, "First name must be at least 2 characters"),
+  lastName: z.string().min(2, "Last name must be at least 2 characters"),
+  email: z.string().email("Invalid email address"),
+  phone: z.string().min(10, "Phone number must be at least 10 digits"),
+  dob: z.date().optional(),
+  gender: z.string().optional(),
+  address: z.string().optional(),
+  department: z.string().min(1, "Department is required"),
+  designation: z.string().min(1, "Designation is required"),
+  employmentType: z.string().min(1, "Employment type is required"),
+  hireDate: z.date(),
+  reportingTo: z.string().optional(),
+  workLocation: z.string().optional(),
+  accountNumber: z.string().min(1, "Account number is required"),
+  bankName: z.string().min(1, "Bank name is required"),
+  branchName: z.string().optional(),
+  ifscCode: z.string().optional(),
+  nationalId: z.string().min(1, "National ID is required"),
+  taxNumber: z.string().min(1, "Tax number is required"),
+  pensionNumber: z.string().optional(),
+  taxStatus: z.string().optional(),
+})
+
+type EmployeeFormData = z.infer<typeof employeeFormSchema>
 
 export function NewEmployeeForm() {
   const [activeTab, setActiveTab] = useState("personal")
+  const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
   const { toast } = useToast()
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    toast({
-      title: "Employee created",
-      description: "The employee has been successfully added to the system.",
-    })
-    navigate("/employees")
+  const form = useForm<EmployeeFormData>({
+    resolver: zodResolver(employeeFormSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      address: "",
+      department: "",
+      designation: "",
+      employmentType: "",
+      hireDate: new Date(),
+      accountNumber: "",
+      bankName: "",
+      branchName: "",
+      ifscCode: "",
+      nationalId: "",
+      taxNumber: "",
+      pensionNumber: "",
+    },
+  })
+
+  const handleSubmit = async (data: EmployeeFormData) => {
+    try {
+      setIsLoading(true)
+      
+      const employeeService = createSQLiteEmployeeService()
+      
+      // Transform form data to employee format
+      const employeeData = {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        phone: data.phone,
+        department: data.department,
+        designation: data.designation,
+        dateOfJoining: data.hireDate.toISOString().split('T')[0],
+        employeeId: `EMP${Date.now()}`, // Generate unique employee ID
+        status: 'active' as const,
+        address: {
+          street: data.address || '',
+          city: '',
+          state: '',
+          zipCode: '',
+          country: ''
+        },
+        bankDetails: {
+          accountNumber: data.accountNumber,
+          bankName: data.bankName,
+          branchCode: data.ifscCode || ''
+        },
+        taxInfo: {
+          taxId: data.taxNumber,
+          taxBracket: 'standard' as const
+        }
+      }
+
+      const newEmployee = await employeeService.create(employeeData)
+      
+      toast({
+        title: "Employee created",
+        description: `${newEmployee.firstName} ${newEmployee.lastName} has been successfully added to the system.`,
+      })
+      
+      navigate("/employees")
+    } catch (error) {
+      console.error("Error creating employee:", error)
+      toast({
+        title: "Error",
+        description: "Failed to create employee. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (

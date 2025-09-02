@@ -20,7 +20,7 @@ import {
   updatePayrollStructure,
   PayrollStructureDocument
 } from "@/lib/services/payroll-structure-service"
-import { initializeDatabase } from "@/lib/db/db-service"
+import { initializeSQLiteDatabase } from "@/lib/db/indexeddb-sqlite-service"
 import { calculateTaxDeduction, calculateNapsaContribution } from "@/lib/utils/payroll-calculations"
 
 interface Allowance {
@@ -78,7 +78,7 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
   useEffect(() => {
     const initDb = async () => {
       try {
-        const { success } = await initializeDatabase();
+        const { success } = await initializeSQLiteDatabase();
         setDbInitialized(success);
         if (!success) {
           toast({

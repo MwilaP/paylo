@@ -114,7 +114,7 @@ export function PayrollGenerator() {
     loadData()
   }, [toast])
 
-  // Use employee data from PouchDB or fallback to dummy data if loading
+  // Use employee data from SQLite or fallback to dummy data if loading
   const displayEmployees = isLoading ? [
     {
       _id: "loading",

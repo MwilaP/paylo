@@ -64,26 +64,20 @@ const initPouchDB = async () => {
       // First try the standard import
       pouchModule = await import("pouchdb")
       PouchDB = pouchModule.default
-    } catch (err1) {
-      console.warn("Standard import failed, trying alternative:", err1.message)
+    } catch (err1: any) {
+      console.warn("Standard import failed, trying alternative:", err1?.message || err1)
       
       try {
         // Try importing the browser build
         pouchModule = await import("pouchdb/dist/pouchdb.js")
         PouchDB = pouchModule.default || pouchModule
-      } catch (err2) {
-        console.warn("Browser build import failed, trying UMD:", err2.message)
+      } catch (err2: any) {
+        console.warn("Browser build import failed:", err2?.message || err2)
         
-        try {
-          // Last resort: try UMD build
-          pouchModule = await import("pouchdb/lib/index.js")
-          PouchDB = pouchModule.default || pouchModule
-        } catch (err3) {
-          const errorMsg = `All PouchDB import strategies failed: ${err3.message}`
-          console.error(errorMsg)
-          lastInitializationError = errorMsg
-          return false
-        }
+        const errorMsg = `All PouchDB import strategies failed: ${err2?.message || err2}`
+        console.error(errorMsg)
+        lastInitializationError = errorMsg
+        return false
       }
     }
 
@@ -96,20 +90,32 @@ const initPouchDB = async () => {
 
     console.log("PouchDB loaded successfully")
 
-    // Load find plugin
+    // Load find plugin - try multiple import strategies
     try {
       console.log("Attempting to load pouchdb-find plugin...")
-      const findModule = await import("pouchdb-find").catch((err) => {
-        console.error("Error importing pouchdb-find:", err)
-        return null
-      })
+      let findModule = null
+      
+      try {
+        findModule = await import("pouchdb-find")
+        PouchDBFind = findModule.default || findModule
+      } catch (err1: any) {
+        console.warn("Standard pouchdb-find import failed:", err1?.message || err1)
+        PouchDBFind = null
+      }
 
-      PouchDBFind = findModule?.default || findModule
-
-      if (PouchDBFind) {
+      if (PouchDBFind && PouchDB && PouchDB.plugin) {
         console.log("Registering pouchdb-find plugin...")
         PouchDB.plugin(PouchDBFind)
-        console.log("Plugin registered successfully")
+        console.log("pouchdb-find plugin registered successfully")
+        
+        // Verify the plugin was loaded by checking if find method exists
+        const testDb = new PouchDB('test-find-capability', { adapter: 'memory' })
+        if (typeof testDb.find === 'function') {
+          console.log("✅ pouchdb-find plugin working correctly")
+          testDb.destroy() // Clean up test database
+        } else {
+          console.error("❌ pouchdb-find plugin not working - find method not available")
+        }
       } else {
         console.warn("pouchdb-find plugin not available, search functionality will be limited")
       }
@@ -707,6 +713,26 @@ export const dbOperations = {
     if (!db) return mockDbOperations.find()
 
     try {
+      // Check if find method exists, if not fall back to allDocs with manual filtering
+      if (typeof db.find !== 'function') {
+        console.warn("db.find is not available, using allDocs fallback")
+        const result = await db.allDocs({ include_docs: true })
+        
+        // Simple manual filtering (basic implementation)
+        let filteredDocs = result.rows.map((row: any) => row.doc)
+        
+        if (query.selector) {
+          filteredDocs = filteredDocs.filter((doc: any) => {
+            for (const [key, value] of Object.entries(query.selector)) {
+              if (doc[key] !== value) return false
+            }
+            return true
+          })
+        }
+        
+        return { docs: filteredDocs }
+      }
+      
       return await db.find(query)
     } catch (error) {
       console.error("Error finding documents:", error)

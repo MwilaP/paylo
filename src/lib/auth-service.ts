@@ -1,6 +1,6 @@
 "use client"
 
-import { getDatabases, dbOperations, initializeTestUser } from "@/lib/db/db-service"
+import { createSQLiteUserService } from "@/lib/db/sqlite-user-service"
 
 // Session type definition
 export interface User {
@@ -20,7 +20,23 @@ export interface Session {
 // Initialize the auth system and create test user if needed
 export const initializeAuth = async (): Promise<boolean> => {
   try {
-    return await initializeTestUser()
+    console.log("Initializing auth system...")
+    
+    // First ensure database is initialized
+    const { initializeSQLiteDatabase } = await import("@/lib/db/indexeddb-sqlite-service")
+    const dbResult = await initializeSQLiteDatabase()
+    
+    if (!dbResult.success) {
+      console.error("Failed to initialize database:", dbResult.error)
+      return false
+    }
+    
+    console.log("Database initialized, creating test user...")
+    const userService = createSQLiteUserService()
+    const testUser = await userService.createTestUser()
+    console.log("Test user created:", testUser)
+    
+    return true
   } catch (error) {
     console.error("Error initializing auth:", error)
     return false
@@ -33,47 +49,46 @@ export const login = async (
   password: string
 ): Promise<{ success: boolean; session: Session | null; error?: string }> => {
   try {
-    const { users } = await getDatabases()
+    const userService = createSQLiteUserService()
+    console.log("login...")
 
-    if (!users) {
-      return { success: false, session: null, error: "Authentication system not available" }
+    // First ensure we have a test user
+    await userService.createTestUser()
+
+    // Validate credentials using SQLite user service
+    const user = await userService.validateCredentials(usernameOrEmail, password)
+    console.log("User validation result:", user)
+
+    // if (!user) {
+    //   console.log("Invalid credentials")
+    //   return { success: false, session: null, error: "Invalid credentials" }
+    // }
+    if(user){
+      const session: Session = {
+        user: {
+          _id: user.id,
+          username: user?.username,
+          email: user?.email,
+          name: user?.name,
+          role: user?.role,
+        },
+        isLoggedIn: true,
+        expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours from now
+      }
+  
+      // Store session in localStorage
+      localStorage.setItem("paylo_session", JSON.stringify(session))
+  
+      return { success: true, session }
+
     }
-
-    // Find user by username or email
-    const result = await dbOperations.find(users, {
-      selector: {
-        $or: [{ username: usernameOrEmail }, { email: usernameOrEmail }],
-      },
-    })
-
-    if (!result.docs || result.docs.length === 0) {
-      return { success: false, session: null, error: "Invalid credentials" }
-    }
-
-    const user = result.docs[0]
-
-    // Check password (in a real app, this would use proper password hashing)
-    if (user.password !== password) {
+    else{
+      console.log("Invalid credentials")
       return { success: false, session: null, error: "Invalid credentials" }
     }
 
     // Create session
-    const session: Session = {
-      user: {
-        _id: user._id,
-        username: user.username,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-      },
-      isLoggedIn: true,
-      expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours from now
-    }
 
-    // Store session in localStorage
-    localStorage.setItem("paylo_session", JSON.stringify(session))
-
-    return { success: true, session }
   } catch (error) {
     console.error("Login error:", error)
     return { success: false, session: null, error: "Authentication failed" }
