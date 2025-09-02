@@ -14,7 +14,7 @@ export const employeeService = (db: any) => ({
       const employee = {
         _id: id,
         ...employeeData,
-      } 
+      }
 
       return await dbOperations.create(db, employee)
     } catch (error) {
