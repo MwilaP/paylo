@@ -12,6 +12,7 @@ import { PayrollHistory } from "@/components/payroll-history"
 import { PayrollSettings } from "@/components/payroll-settings"
 import PayrollStructureNewPage from "./PayrollStructureNewPage"
 import PayrollStructureEditPage from "./PayrollStructureEditPage"
+import PayrollHistoryDetailPage from "./PayrollHistoryDetailPage"
 import { format } from "date-fns"
 import { payrollHistoryService } from "@/lib/db/services/payroll-history.service"
 import { useDatabase } from "@/lib/db/db-context"
@@ -227,6 +228,7 @@ export default function PayrollPage() {
       <Route path="/structures/new" element={<PayrollStructureNewPage />} />
       <Route path="/structures/:id/edit" element={<PayrollStructureEditPage />} />
       <Route path="/history" element={<PayrollHistory />} />
+      <Route path="/history/:id" element={<PayrollHistoryDetailPage />} />
     </Routes>
   )
 }
