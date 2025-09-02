@@ -15,11 +15,8 @@ import { EmployeeSalary } from "@/components/employee-salary"
 import { EmployeeDocuments } from "@/components/employee-documents"
 import { EmployeePayrollStructure } from "@/components/employee-payroll-structure"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  getEmployeeService,
-  getPayrollStructureService,
-  getPayrollHistoryService, // Added import
-} from "@/lib/db/services/service-factory"
+import { createEmployeeServiceCompat } from "@/lib/db/sqlite-employee-service"
+import { createPayrollStructureServiceCompat } from "@/lib/db/sqlite-payroll-service"
 import { useToast } from "@/hooks/use-toast"
 
 export function EmployeeProfile({ id }: { id: string }) {
@@ -41,9 +38,8 @@ export function EmployeeProfile({ id }: { id: string }) {
   const { toast } = useToast()
   const [payrollStructure, setPayrollStructure] = useState<any>(null)
   const [annualSalary, setAnnualSalary] = useState<number | null>(null)
-  const [payrollHistoryService, setPayrollHistoryService] = useState<any>(null) // Added state for history service
   const [payslips, setPayslips] = useState<any[]>([]) // Added state for payslips
-  const [payslipsLoading, setPayslipsLoading] = useState<boolean>(true) // Added loading state for payslips
+  const [payslipsLoading, setPayslipsLoading] = useState<boolean>(false) // Added loading state for payslips
   const [payslipsError, setPayslipsError] = useState<string | null>(null) // Added error state for payslips
       const calculateTimeAtCompany = (joinDateStr: string | undefined): string => {
         if (!joinDateStr) return "N/A";
@@ -82,13 +78,11 @@ export function EmployeeProfile({ id }: { id: string }) {
         console.log("Initializing services...")
         setServiceError(null)
 
-        const empService = await getEmployeeService()
-        const payrollStructService = await getPayrollStructureService()
-        const payrollHistService = await getPayrollHistoryService() // Initialize history service
+        const empService = createEmployeeServiceCompat()
+        const payrollStructService = createPayrollStructureServiceCompat()
 
         setEmployeeService(empService)
         setPayrollStructureService(payrollStructService)
-        setPayrollHistoryService(payrollHistService) // Set history service state
         setServicesLoaded(true)
         console.log("Services initialized successfully")
       } catch (error) {
@@ -98,7 +92,6 @@ export function EmployeeProfile({ id }: { id: string }) {
         // Set services to empty implementations to avoid null errors
         setEmployeeService({})
         setPayrollStructureService({})
-        setPayrollHistoryService({}) // Set mock history service on error
         setServicesLoaded(true)
 
         toast({
@@ -136,7 +129,7 @@ export function EmployeeProfile({ id }: { id: string }) {
       setLoading(true)
       setError(null)
       try {
-        const data = await employeeService.getEmployeeById(id)
+        const data = await employeeService.getById(id)
         if (data) {
           setEmployee(data)
           console.log("employee: ", data)
@@ -164,13 +157,13 @@ export function EmployeeProfile({ id }: { id: string }) {
 
     const fetchStructureAndCalculateSalary = async () => {
       try {
-        const structure = await payrollStructureService.getPayrollStructureById(
+        const structure = await payrollStructureService.getById(
           employee.payrollStructureId
         );
         setPayrollStructure(structure);
 
         if (structure) {
-          const salaryDetails = payrollStructureService.calculateNetSalary(structure);
+          const salaryDetails = payrollStructureService.calculateSalaryDetails(structure);
           // Assuming calculateNetSalary returns monthly net salary
           setAnnualSalary(salaryDetails.netSalary * 12);
         } else {
@@ -190,31 +183,13 @@ export function EmployeeProfile({ id }: { id: string }) {
     fetchStructureAndCalculateSalary();
   }, [employee, payrollStructureService]);
 
-  // Fetch payslips
+  // TODO: Implement payslips fetching when payroll history service is available
   useEffect(() => {
-    if (!id || !payrollHistoryService) {
-      // Wait for ID and service
-      return;
-    }
-
-    const fetchPayslips = async () => {
-      setPayslipsLoading(true);
-      setPayslipsError(null);
-      try {
-        const data = await payrollHistoryService.getPayrollRecordsByEmployee(id);
-        setPayslips(data || []);
-        console.log("Payslips fetched: ", data);
-      } catch (err) {
-        console.error("Failed to fetch payslips:", err);
-        setPayslipsError(err instanceof Error ? err.message : "An unknown error occurred fetching payslips");
-        setPayslips([]);
-      } finally {
-        setPayslipsLoading(false);
-      }
-    };
-
-    fetchPayslips();
-  }, [id, payrollHistoryService]); // Rerun when ID or service changes
+    // For now, set empty payslips to avoid errors
+    setPayslips([]);
+    setPayslipsLoading(false);
+    setPayslipsError(null);
+  }, [id]);
   // Handle loading and error states
   if (loading) {
     return (

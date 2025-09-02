@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
-import { getEmployeeService } from "@/lib/db/services/service-factory"
+import { createEmployeeServiceCompat } from "@/lib/db/sqlite-employee-service"
 
 interface AssignStructureModalProps {
   open: boolean
@@ -46,7 +46,7 @@ export function AssignStructureModal({ open, onOpenChange, structure }: AssignSt
     const initServices = async () => {
       try {
         console.log("Initializing employee service for assign modal...");
-        const empService = await getEmployeeService();
+        const empService = createEmployeeServiceCompat();
         setEmployeeService(empService);
         setServicesLoaded(true);
         console.log("Employee service initialized successfully");

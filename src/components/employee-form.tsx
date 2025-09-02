@@ -18,11 +18,13 @@ import { format } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { getEmployeeService, getPayrollStructureService } from "@/lib/db/services/service-factory"
+import { createEmployeeServiceCompat } from "@/lib/db/sqlite-employee-service"
+import { createPayrollStructureServiceCompat } from "@/lib/db/sqlite-payroll-service"
 import type { Employee } from "@/lib/db/models/employee.model"
 import type { PayrollStructure } from "@/lib/db/models/payroll-structure.model"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
+import { initializeSQLiteDatabase } from "@/lib/db/indexeddb-sqlite-service"
 
 interface EmployeeFormProps {
   employeeId?: string
@@ -69,15 +71,20 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
     status: "Active",
   })
 
+  // SQLite initialization state
+  const [dbInitialized, setDbInitialized] = useState(false)
+
   // Initialize services
   useEffect(() => {
     const initServices = async () => {
+      if (!dbInitialized) return
+
       try {
         console.log("Initializing services...")
         setServiceError(null)
 
-        const empService = await getEmployeeService()
-        const payrollService = await getPayrollStructureService()
+        const empService = createEmployeeServiceCompat()
+        const payrollService = createPayrollStructureServiceCompat()
 
         setEmployeeService(empService)
         setPayrollStructureService(payrollService)
@@ -101,7 +108,20 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
     }
 
     initServices()
-  }, [toast])
+  }, [dbInitialized, toast])
+
+  // Initialize SQLite database
+  useEffect(() => {
+    const initDb = async () => {
+      try {
+        const { success } = await initializeSQLiteDatabase()
+        setDbInitialized(success)
+      } catch (error) {
+        console.error("Error initializing database:", error)
+      }
+    }
+    initDb()
+  }, [])
 
   // Load payroll structures
   useEffect(() => {
@@ -110,7 +130,7 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
     const loadPayrollStructures = async () => {
       try {
         console.log("Loading payroll structures...")
-        const structures = await payrollStructureService.getAllPayrollStructures()
+        const structures = await payrollStructureService.getAll()
         setPayrollStructures(structures || [])
         console.log(`Loaded ${structures?.length || 0} payroll structures`)
       } catch (error) {
@@ -136,7 +156,7 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
         setIsLoading(true)
         try {
           console.log(`Loading employee data for ID: ${employeeId}`)
-          const employee = await employeeService.getEmployeeById(employeeId)
+          const employee = await employeeService.getById(employeeId)
           if (!employee) {
             console.error("Employee not found")
             toast({
@@ -161,7 +181,7 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
           if (employee.payrollStructureId) {
             try {
               console.log(`Loading payroll structure for ID: ${employee.payrollStructureId}`)
-              const structure = await payrollStructureService.getPayrollStructureById(employee.payrollStructureId)
+              const structure = await payrollStructureService.getById(employee.payrollStructureId)
               setSelectedStructure(structure)
               console.log("Payroll structure loaded successfully")
             } catch (error) {
@@ -192,7 +212,7 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
       if (formData.payrollStructureId) {
         try {
           console.log(`Loading selected payroll structure: ${formData.payrollStructureId}`)
-          const structure = await payrollStructureService.getPayrollStructureById(formData.payrollStructureId)
+          const structure = await payrollStructureService.getById(formData.payrollStructureId)
           setSelectedStructure(structure)
           console.log("Selected payroll structure loaded successfully")
         } catch (error) {
@@ -238,13 +258,13 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
       }
 
       if (isEditing && employeeId) {
-        await employeeService.updateEmployee(employeeId, employeeData)
+        await employeeService.update(employeeId, employeeData)
         toast({
           title: "Success",
           description: "Employee updated successfully",
         })
       } else {
-        await employeeService.createEmployee(employeeData as Employee)
+        await employeeService.create(employeeData as Employee)
         toast({
           title: "Success",
           description: "Employee created successfully",
@@ -322,52 +342,48 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
               </div>
               <div className="grid flex-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name *</Label>
+                  <Label htmlFor="firstName">First Name</Label>
                   <Input
                     id="firstName"
                     placeholder="Enter first name"
                     value={formData.firstName}
                     onChange={(e) => handleInputChange("firstName", e.target.value)}
-                    required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name *</Label>
+                  <Label htmlFor="lastName">Last Name</Label>
                   <Input
                     id="lastName"
                     placeholder="Enter last name"
                     value={formData.lastName}
                     onChange={(e) => handleInputChange("lastName", e.target.value)}
-                    required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email *</Label>
+                  <Label htmlFor="email">Email</Label>
                   <Input
                     id="email"
                     type="email"
                     placeholder="Enter email address"
                     value={formData.email}
                     onChange={(e) => handleInputChange("email", e.target.value)}
-                    required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number *</Label>
+                  <Label htmlFor="phone">Phone Number</Label>
                   <Input
                     id="phone"
                     placeholder="Enter phone number"
                     value={formData.phone}
                     onChange={(e) => handleInputChange("phone", e.target.value)}
-                    required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="dob">Date of Birth *</Label>
+                  <Label htmlFor="dob">Date of Birth</Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
@@ -433,7 +449,7 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
           <TabsContent value="job" className="space-y-4 pt-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="department">Department *</Label>
+                <Label htmlFor="department">Department</Label>
                 <Select value={formData.department} onValueChange={(value) => handleInputChange("department", value)}>
                   <SelectTrigger id="department">
                     <SelectValue placeholder="Select department" />
@@ -452,18 +468,17 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="designation">Designation *</Label>
+                <Label htmlFor="designation">Designation</Label>
                 <Input
                   id="designation"
                   placeholder="Enter job title"
                   value={formData.designation}
                   onChange={(e) => handleInputChange("designation", e.target.value)}
-                  required
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="employmentType">Employment Type *</Label>
+                <Label htmlFor="employmentType">Employment Type</Label>
                 <Select
                   value={formData.employmentType}
                   onValueChange={(value) => handleInputChange("employmentType", value)}
@@ -481,7 +496,7 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="hireDate">Hire Date *</Label>
+                <Label htmlFor="hireDate">Hire Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -555,7 +570,7 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
           <TabsContent value="banking" className="space-y-4 pt-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="accountNumber">Account Number *</Label>
+                <Label htmlFor="accountNumber">Account Number</Label>
                 <Input
                   id="accountNumber"
                   placeholder="Enter account number"
@@ -565,7 +580,7 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="bankName">Bank Name *</Label>
+                <Label htmlFor="bankName">Bank Name</Label>
                 <Input
                   id="bankName"
                   placeholder="Enter bank name"
@@ -609,7 +624,7 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
           <TabsContent value="tax" className="space-y-4 pt-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="nationalId">National ID *</Label>
+                <Label htmlFor="nationalId">National ID</Label>
                 <Input
                   id="nationalId"
                   placeholder="Enter national ID number"
@@ -619,7 +634,7 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="taxNumber">Tax Number *</Label>
+                <Label htmlFor="taxNumber">Tax Number</Label>
                 <Input
                   id="taxNumber"
                   placeholder="Enter tax identification number"
@@ -675,7 +690,7 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="payrollStructure">Payroll Structure *</Label>
+                  <Label htmlFor="payrollStructure">Payroll Structure</Label>
                   <Select
                     value={formData.payrollStructureId}
                     onValueChange={(value) => handleInputChange("payrollStructureId", value)}

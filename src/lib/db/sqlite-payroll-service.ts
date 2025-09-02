@@ -317,6 +317,50 @@ export const createPayrollStructureServiceCompat = () => {
 
     async calculateNetSalary(structureId: string) {
       return await sqliteService.calculateNetSalary(structureId)
+    },
+
+    // Add calculateSalaryDetails method for compatibility with employee form
+    calculateSalaryDetails(structure: any) {
+      if (!structure) return {
+        basicSalary: 0,
+        totalAllowances: 0,
+        totalDeductions: 0,
+        grossSalary: 0,
+        netSalary: 0
+      }
+
+      const basicSalary = structure.basicSalary || 0
+      
+      // Calculate total allowances
+      const totalAllowances = (structure.allowances || []).reduce((total: number, allowance: any) => {
+        if (allowance.type === "fixed") {
+          return total + (allowance.value || 0)
+        } else {
+          // Percentage allowance
+          return total + (basicSalary * (allowance.value || 0)) / 100
+        }
+      }, 0)
+
+      // Calculate total deductions
+      const totalDeductions = (structure.deductions || []).reduce((total: number, deduction: any) => {
+        if (deduction.type === "fixed") {
+          return total + (deduction.value || 0)
+        } else {
+          // Percentage deduction
+          return total + (basicSalary * (deduction.value || 0)) / 100
+        }
+      }, 0)
+
+      const grossSalary = basicSalary + totalAllowances
+      const netSalary = grossSalary - totalDeductions
+
+      return {
+        basicSalary,
+        totalAllowances,
+        totalDeductions,
+        grossSalary,
+        netSalary
+      }
     }
   }
 }

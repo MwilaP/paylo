@@ -14,7 +14,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useDatabase } from "@/lib/db/db-context"
 import { Employee } from "@/lib/db/employee-service"
 import { EmployeeFilters } from "./employee-filters"
-import { getEmployeeService, getPayrollStructureService } from "@/lib/db/services/service-factory"
+import { createEmployeeServiceCompat } from "@/lib/db/sqlite-employee-service"
+import { createPayrollStructureServiceCompat } from "@/lib/db/sqlite-payroll-service"
 import { useToast } from "@/hooks/use-toast"
 
 
@@ -38,37 +39,30 @@ export function EmployeesList() {
   // Function to load employees data
   // Initialize services
   useEffect(() => {
-    const initServices = async () => {
-      try {
-        console.log("Initializing services...")
-        setServiceError(null)
+    try {
+      console.log("Initializing services...")
+      setServiceError(null)
 
-        const empService = await getEmployeeService()
-        // const payrollService = await getPayrollStructureService()
+      const empService = createEmployeeServiceCompat()
+      
+      setEmployeeService(empService)
+      console.log(" employee services ", empService)
+      setServicesLoaded(true)
+      console.log("Services initialized successfully")
+    } catch (error) {
+      console.error("Error initializing services:", error)
+      setServiceError("Failed to initialize services. The application will run with limited functionality.")
 
-        setEmployeeService(empService)
-        console.log(" employee services ", empService)
-        //setPayrollStructureService(payrollService)
-        setServicesLoaded(true)
-        console.log("Services initialized successfully")
-      } catch (error) {
-        console.error("Error initializing services:", error)
-        setServiceError("Failed to initialize services. The application will run with limited functionality.")
+      // Set services to empty implementations to avoid null errors
+      setEmployeeService({})
+      setServicesLoaded(true)
 
-        // Set services to empty implementations to avoid null errors
-        setEmployeeService({})
-        //setPayrollStructureService({})
-        setServicesLoaded(true)
-
-        toast({
-          title: "Warning",
-          description: "Running in limited functionality mode due to database initialization issues.",
-          variant: "destructive",
-        })
-      }
+      toast({
+        title: "Warning",
+        description: "Running in limited functionality mode due to database initialization issues.",
+        variant: "destructive",
+      })
     }
-
-    initServices()
   }, [toast])
   const loadEmployees = async () => {
     console.log("fetching employees")

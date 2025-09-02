@@ -204,7 +204,9 @@ export const createEmployeeServiceCompat = () => {
     },
 
     async getById(id: string) {
+      console.log(`SQLite Employee Service: Looking for employee with ID: ${id}`)
       const result = await sqliteService.getById(id)
+      console.log(`SQLite Employee Service: Found employee:`, result)
       return result ? convertSQLiteToPouchDB.employee(result) : null
     },
 
@@ -232,6 +234,7 @@ export const createEmployeeServiceCompat = () => {
 
     async getAll() {
       const results = await sqliteService.getAll()
+      console.log(`SQLite Employee Service: Found ${results.length} employees:`, results.map(r => ({ id: r.id, name: `${r.first_name} ${r.last_name}` })))
       return results.map(convertSQLiteToPouchDB.employee)
     },
 
@@ -253,6 +256,57 @@ export const createEmployeeServiceCompat = () => {
 
     async getEmployeeCount() {
       return await sqliteService.getEmployeeCount()
+    },
+
+    // Add missing methods for compatibility
+    async getAllEmployees() {
+      return await this.getAll()
+    },
+
+    async getEmployeeById(id: string) {
+      return await this.getById(id)
+    },
+
+    async createEmployee(employeeData: any) {
+      return await this.create(employeeData)
+    },
+
+    async updateEmployee(id: string, updates: any) {
+      return await this.update(id, updates)
+    },
+
+    async deleteEmployee(id: string) {
+      return await this.delete(id)
+    },
+
+    async searchEmployees(query: string) {
+      return await this.search(query)
+    },
+
+    async filterEmployeesByDepartment(department: string) {
+      return await this.findByDepartment(department)
+    },
+
+    async filterEmployeesByStatus(status: string) {
+      return await this.findByStatus(status)
+    },
+
+    async getEmployeesByPayrollStructure(payrollStructureId: string) {
+      const results = await sqliteService.findByPayrollStructure(payrollStructureId)
+      return results.map(convertSQLiteToPouchDB.employee)
+    },
+
+    async assignPayrollStructure(employeeId: string, payrollStructureId: string) {
+      return await this.update(employeeId, { payrollStructureId })
+    },
+
+    async bulkAssignPayrollStructure(employeeIds: string[], payrollStructureId: string) {
+      const results = []
+      for (const employeeId of employeeIds) {
+        const result = await this.update(employeeId, { payrollStructureId })
+        if (result) results.push(result)
+      }
+      return results
     }
   }
 }

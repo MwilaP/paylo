@@ -5,38 +5,37 @@ import { v4 as uuidv4 } from "uuid"
 export const sqliteEmployeeSchema = z.object({
   id: z.string().default(() => `employee_${uuidv4()}`),
   rev: z.string().optional(),
-  first_name: z.string().min(1, "First name is required"),
-  last_name: z.string().min(1, "Last name is required"),
-  email: z.string().email("Invalid email address"),
-  phone: z.string().min(1, "Phone number is required"),
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
+  email: z.string().email("Invalid email address").optional(),
+  phone: z.string().optional(),
   dob: z.string().optional(),
   gender: z.enum(["male", "female", "other", "prefer-not-to-say"]).optional(),
   address: z.string().optional(),
 
   // Job information
-  department: z.string().min(1, "Department is required"),
-  designation: z.string().min(1, "Designation is required"),
+  department: z.string().optional(),
+  designation: z.string().optional(),
   employment_type: z.enum(["full-time", "part-time", "contract", "intern"]),
-  hire_date: z.string().min(1, "Hire date is required"),
+  hire_date: z.string().optional(),
   reporting_to: z.string().optional(),
   work_location: z.string().optional(),
   status: z.enum(["Active", "Pending", "On Leave", "Terminated"]).default("Active"),
 
   // Banking information
-  account_number: z.string().min(1, "Account number is required"),
-  bank_name: z.string().min(1, "Bank name is required"),
+  account_number: z.string().optional(),
+  bank_name: z.string().optional(),
   branch_name: z.string().optional(),
-  ifsc_code: z.string().optional(),
+  ifsc_code: z.string().optional(), 
 
   // Tax information
-  national_id: z.string().min(1, "National ID is required"),
-  tax_number: z.string().min(1, "Tax number is required"),
+  national_id: z.string().optional(),
+  tax_number: z.string().optional(),
   pension_number: z.string().optional(),
-  tax_status: z.enum(["resident", "non-resident", "foreign"]).optional(),
+  tax_status: z.enum(["resident", "non-resident", "foreign"]).or(z.literal("")).optional(),
 
   // Payroll information
   payroll_structure_id: z.string().optional(),
-
   // Metadata
   created_at: z.string().optional(),
   updated_at: z.string().optional(),

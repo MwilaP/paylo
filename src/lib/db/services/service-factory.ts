@@ -23,8 +23,8 @@ const mockEmployeeService = {
     console.warn("Using mock employee service: deleteEmployee")
     return null
   },
-  getAllEmployees: async () => {
-    console.warn("Using mock employee service: getAllEmployees")
+  getAll: async () => {
+    console.warn("Using mock employee service: getAll")
     return []
   },
   searchEmployees: async () => {
@@ -70,8 +70,8 @@ const mockPayrollStructureService = {
     console.warn("Using mock payroll structure service: deletePayrollStructure")
     return null
   },
-  getAllPayrollStructures: async () => {
-    console.warn("Using mock payroll structure service: getAllPayrollStructures")
+  getAll: async () => {
+    console.warn("Using mock payroll structure service: getAll")
     return []
   },
   searchPayrollStructures: async () => {
@@ -153,10 +153,10 @@ let _employeeService: any = null
 let _payrollStructureService: any = null
 let _payrollHistoryService: any = null
 
-// Import service factories
-import { employeeService } from "./employee.service"
-import { payrollStructureService } from "./payroll-structure.service"
-import { payrollHistoryService } from "./payroll-history.service"
+// Import SQLite service factories
+import { createEmployeeServiceCompat } from "../sqlite-employee-service"
+import { createPayrollStructureServiceCompat } from "../sqlite-payroll-service"
+import { createPayrollHistoryServiceCompat } from "../sqlite-payroll-history-service"
 
 // Safe getter for employee service
 export const getEmployeeService = async () => {
@@ -171,15 +171,8 @@ export const getEmployeeService = async () => {
   }
 
   try {
-    const databases = await getDatabases()
-
-    // Use mock service if database is not available
-    if (!databases.employees) {
-      console.warn("Employee database not available, using mock service")
-      return mockEmployeeService
-    }
-
-    _employeeService = employeeService(databases.employees)
+    // Use SQLite service directly
+    _employeeService = createEmployeeServiceCompat()
     return _employeeService
   } catch (error) {
     console.error("Error getting employee service:", error)
@@ -200,15 +193,8 @@ export const getPayrollStructureService = async () => {
   }
 
   try {
-    const databases = await getDatabases()
-
-    // Use mock service if database is not available
-    if (!databases.payrollStructures) {
-      console.warn("Payroll structure database not available, using mock service")
-      return mockPayrollStructureService
-    }
-
-    _payrollStructureService = payrollStructureService(databases.payrollStructures)
+    // Use SQLite service directly
+    _payrollStructureService = createPayrollStructureServiceCompat()
     return _payrollStructureService
   } catch (error) {
     console.error("Error getting payroll structure service:", error)
@@ -229,15 +215,8 @@ export const getPayrollHistoryService = async () => {
   }
 
   try {
-    const databases = await getDatabases()
-
-    // Use mock service if database is not available
-    if (!databases.payrollHistory) {
-      console.warn("Payroll history database not available, using mock service")
-      return mockPayrollHistoryService
-    }
-
-    _payrollHistoryService = payrollHistoryService(databases.payrollHistory)
+    // Use SQLite service directly
+    _payrollHistoryService = createPayrollHistoryServiceCompat()
     return _payrollHistoryService
   } catch (error) {
     console.error("Error getting payroll history service:", error)
@@ -270,7 +249,7 @@ export const savePayrollHistory = async (records: PayrollHistory[]): Promise<Pay
 export const fetchPayrollStructures = async (): Promise<PayrollStructure[]> => {
   try {
     const payrollStructureServiceInstance = await getPayrollStructureService()
-    const structures = await payrollStructureServiceInstance.getAllPayrollStructures()
+    const structures = await payrollStructureServiceInstance.getAll()
     return structures || [] // Return empty array if null/undefined
   } catch (error) {
     console.error("Error fetching payroll structures:", error)
@@ -282,7 +261,7 @@ export const fetchPayrollStructures = async (): Promise<PayrollStructure[]> => {
 export const fetchAllEmployees = async (): Promise<Employee[]> => {
   try {
     const employeeServiceInstance = await getEmployeeService()
-    const employees = await employeeServiceInstance.getAllEmployees()
+    const employees = await employeeServiceInstance.getAll()
     return employees || [] // Return empty array if null/undefined
   } catch (error) {
     console.error("Error fetching employees:", error)
