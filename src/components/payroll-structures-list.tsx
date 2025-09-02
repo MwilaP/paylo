@@ -1,4 +1,3 @@
-"use client"
 
 import type React from "react"
 
@@ -12,34 +11,59 @@ import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { MoreHorizontal, Plus, Search, FileText } from "lucide-react"
 import { AssignStructureModal } from "./assign-structure-modal"
-import { useDatabase } from "@/lib/db/db-context"
+import { PaySummaryModal } from "./pay-summary-modal"
+import { createPayrollStructureServiceCompat } from "@/lib/db/sqlite-payroll-service"
+import { initializeSQLiteDatabase } from "@/lib/db/indexeddb-sqlite-service"
 
 export function PayrollStructuresList() {
   const navigate = useNavigate()
-  const { payrollStructureService, isLoading } = useDatabase()
   const [structures, setStructures] = useState<any[]>([])
   const [filteredStructures, setFilteredStructures] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [assignModalOpen, setAssignModalOpen] = useState(false)
+  const [paySummaryModalOpen, setPaySummaryModalOpen] = useState(false)
   const [selectedStructure, setSelectedStructure] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [dbInitialized, setDbInitialized] = useState(false)
+  
+  // Initialize database
+  useEffect(() => {
+    const initDb = async () => {
+      try {
+        const { success } = await initializeSQLiteDatabase();
+        setDbInitialized(success);
+      } catch (error) {
+        console.error("Error initializing database:", error);
+      }
+    };
 
+    initDb();
+  }, []);
+
+  // Load structures when database is initialized
   useEffect(() => {
     const loadStructures = async () => {
-      if (!payrollStructureService) return
+      if (!dbInitialized) return
 
       try {
-        const data = await payrollStructureService.getAllPayrollStructures()
-        setStructures(data)
-        setFilteredStructures(data)
+        setIsLoading(true);
+        console.log("Loading payroll structures from SQLite...");
+        const payrollService = createPayrollStructureServiceCompat();
+        const data = await payrollService.getAll();
+        console.log("Loaded structures:", data);
+        setStructures(data || []);
+        setFilteredStructures(data || []);
       } catch (error) {
-        console.error("Error loading payroll structures:", error)
-        setStructures([])
-        setFilteredStructures([])
+        console.error("Error loading payroll structures:", error);
+        setStructures([]);
+        setFilteredStructures([]);
+      } finally {
+        setIsLoading(false);
       }
     }
 
     loadStructures()
-  }, [payrollStructureService])
+  }, [dbInitialized])
 
   useEffect(() => {
     if (!structures.length) {
@@ -75,6 +99,11 @@ export function PayrollStructuresList() {
   const handleAssignStructure = (structure: any) => {
     setSelectedStructure(structure)
     setAssignModalOpen(true)
+  }
+
+  const handleViewPaySummary = (structure: any) => {
+    setSelectedStructure(structure)
+    setPaySummaryModalOpen(true)
   }
 
   // Empty state component
@@ -168,7 +197,7 @@ export function PayrollStructuresList() {
                               {structure.frequency || "Monthly"}
                             </Badge>
                           </TableCell>
-                          <TableCell>${structure.basicSalary?.toLocaleString() || "0"}</TableCell>
+                          <TableCell>ZMW {structure.basicSalary?.toLocaleString() || "0"}</TableCell>
                           <TableCell>{structure.allowances?.length || 0}</TableCell>
                           <TableCell>{structure.deductions?.length || 0}</TableCell>
                           <TableCell className="text-right">
@@ -180,6 +209,9 @@ export function PayrollStructuresList() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleViewPaySummary(structure)}>
+                                  View Pay Summary
+                                </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleEditStructure(structure._id)}>
                                   Edit
                                 </DropdownMenuItem>
@@ -201,7 +233,10 @@ export function PayrollStructuresList() {
       </Card>
 
       {selectedStructure && (
-        <AssignStructureModal open={assignModalOpen} onOpenChange={setAssignModalOpen} structure={selectedStructure} />
+        <>
+          <AssignStructureModal open={assignModalOpen} onOpenChange={setAssignModalOpen} structure={selectedStructure} />
+          <PaySummaryModal open={paySummaryModalOpen} onOpenChange={setPaySummaryModalOpen} structure={selectedStructure} />
+        </>
       )}
     </>
   )

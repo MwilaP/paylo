@@ -1,4 +1,3 @@
-"use client"
 
 import { useEffect, useState } from "react"
 import { Check, ChevronsUpDown, Search } from "lucide-react"
@@ -18,69 +17,85 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
-import { useDatabase } from "@/lib/db/db-context"
-import type { Employee } from "@/lib/db/models/employee.model"
-import type { PayrollStructure } from "@/lib/db/models/payroll-structure.model"
+import { getEmployeeService } from "@/lib/db/services/service-factory"
 
 interface AssignStructureModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  structureId: string | null
+  structure: any
 }
 
-export function AssignStructureModal({ open, onOpenChange, structureId }: AssignStructureModalProps) {
+export function AssignStructureModal({ open, onOpenChange, structure }: AssignStructureModalProps) {
   const { toast } = useToast()
-  const { employeeService, payrollStructureService } = useDatabase()
 
-  const [structure, setStructure] = useState<PayrollStructure | null>(null)
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([])
+  const [employeeService, setEmployeeService] = useState<any>(null)
+  const [employees, setEmployees] = useState<any[]>([])
+  const [filteredEmployees, setFilteredEmployees] = useState<any[]>([])
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [servicesLoaded, setServicesLoaded] = useState(false)
 
   // Department filter
   const [departmentOpen, setDepartmentOpen] = useState(false)
   const [selectedDepartment, setSelectedDepartment] = useState<string>("")
 
-  // Load data when modal opens or structure ID changes
+  // Initialize services
   useEffect(() => {
-    const loadData = async () => {
-      if (open && structureId) {
+    const initServices = async () => {
+      try {
+        console.log("Initializing employee service for assign modal...");
+        const empService = await getEmployeeService();
+        setEmployeeService(empService);
+        setServicesLoaded(true);
+        console.log("Employee service initialized successfully");
+      } catch (error) {
+        console.error("Error initializing employee service:", error);
+        toast({
+          title: "Error",
+          description: "Failed to initialize employee service",
+          variant: "destructive",
+        });
+      }
+    };
+
+    initServices();
+  }, [toast]);
+
+  // Load employees when modal opens and service is ready
+  useEffect(() => {
+    const loadEmployees = async () => {
+      if (open && servicesLoaded && employeeService) {
         setIsLoading(true)
         try {
-          // Load structure
-          const structureData = await payrollStructureService.getPayrollStructureById(structureId)
-          setStructure(structureData)
-
-          // Load all employees
-          const employeeData = await employeeService.getAllEmployees()
-          setEmployees(employeeData)
-          setFilteredEmployees(employeeData)
+          console.log("Loading employees for assign modal...");
+          const employeeData = await employeeService.getAllEmployees();
+          console.log("Loaded employees:", employeeData);
+          setEmployees(employeeData || []);
+          setFilteredEmployees(employeeData || []);
 
           // Get employees already assigned to this structure
-          const assignedEmployees = employeeData
-            .filter((employee) => employee.payrollStructureId === structureId)
-            .map((employee) => employee._id)
+          const assignedEmployees = (employeeData || [])
+            .filter((employee) => employee.payrollStructureId === structure?._id)
+            .map((employee) => employee._id);
 
-          setSelectedEmployees(assignedEmployees)
+          setSelectedEmployees(assignedEmployees);
         } catch (error) {
-          console.error("Error loading data:", error)
+          console.error("Error loading employees:", error);
           toast({
             title: "Error",
-            description: "Failed to load data",
+            description: "Failed to load employees",
             variant: "destructive",
-          })
-          onOpenChange(false)
+          });
         } finally {
-          setIsLoading(false)
+          setIsLoading(false);
         }
       }
     }
 
-    loadData()
-  }, [open, structureId, employeeService, payrollStructureService, toast, onOpenChange])
+    loadEmployees()
+  }, [open, servicesLoaded, employeeService, structure, toast])
 
   // Filter employees when search query or department changes
   useEffect(() => {
@@ -123,12 +138,18 @@ export function AssignStructureModal({ open, onOpenChange, structureId }: Assign
   }
 
   const handleSave = async () => {
-    if (!structureId) return
+    if (!structure?._id || !employeeService) return
 
     setIsSaving(true)
     try {
-      // Bulk assign structure to selected employees
-      await employeeService.bulkAssignPayrollStructure(selectedEmployees, structureId)
+      console.log("Assigning structure to employees:", selectedEmployees);
+      
+      // Update each selected employee with the structure ID
+      for (const employeeId of selectedEmployees) {
+        await employeeService.updateEmployee(employeeId, {
+          payrollStructureId: structure._id
+        });
+      }
 
       toast({
         title: "Success",
@@ -280,10 +301,10 @@ export function AssignStructureModal({ open, onOpenChange, structureId }: Assign
                                 {employee.designation} • {employee.department}
                               </div>
                             </div>
-                            {employee.payrollStructureId && employee.payrollStructureId !== structureId && (
+                            {employee.payrollStructureId && employee.payrollStructureId !== structure?._id && (
                               <div className="text-xs text-muted-foreground">Has another structure</div>
                             )}
-                            {employee.payrollStructureId === structureId && (
+                            {employee.payrollStructureId === structure?._id && (
                               <div className="text-xs text-primary">Currently assigned</div>
                             )}
                           </div>
