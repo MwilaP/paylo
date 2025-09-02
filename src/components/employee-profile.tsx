@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { useParams, useSearchParams } from "react-router-dom"
 import { useDatabase } from "@/lib/db/db-context"
 import { Employee } from "@/lib/db/employee-service"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -23,7 +23,8 @@ import {
 import { useToast } from "@/hooks/use-toast"
 
 export function EmployeeProfile({ id }: { id: string }) {
-  const searchParams = useSearchParams()
+  const params = useParams()
+  const [searchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState("overview")
   const {
     isLoading: dbLoading,

@@ -69,7 +69,7 @@ export function PayrollHistory() {
   }, [payrollHistoryService])
 
   const handleGeneratePayroll = () => {
-    router.push("/payroll/generate")
+    navigate("/payroll/generate")
   }
 
   const getStatusBadge = (status: string) => {
@@ -145,7 +145,7 @@ export function PayrollHistory() {
                     </TableCell> */}
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" onClick={() => router.push(`/payroll/history/${payroll._id}`)}>
+                        <Button variant="outline" size="sm" onClick={() => navigate(`/payroll/history/${payroll._id}`)}>
                           <Eye className="mr-2 h-4 w-4" />
                           View
                         </Button>

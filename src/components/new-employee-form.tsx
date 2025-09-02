@@ -133,8 +133,8 @@ export function NewEmployeeForm() {
   }
 
   return (
-    <Form>
-      <form onSubmit={handleSubmit}>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleSubmit)}>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="personal">Personal Info</TabsTrigger>
@@ -156,6 +156,7 @@ export function NewEmployeeForm() {
               </div>
               <div className="grid flex-1 gap-4 md:grid-cols-2">
                 <FormField
+                  control={form.control}
                   name="firstName"
                   render={({ field }) => (
                     <FormItem>
@@ -168,6 +169,7 @@ export function NewEmployeeForm() {
                   )}
                 />
                 <FormField
+                  control={form.control}
                   name="lastName"
                   render={({ field }) => (
                     <FormItem>
@@ -180,6 +182,7 @@ export function NewEmployeeForm() {
                   )}
                 />
                 <FormField
+                  control={form.control}
                   name="email"
                   render={({ field }) => (
                     <FormItem>
@@ -192,6 +195,7 @@ export function NewEmployeeForm() {
                   )}
                 />
                 <FormField
+                  control={form.control}
                   name="phone"
                   render={({ field }) => (
                     <FormItem>
@@ -204,6 +208,7 @@ export function NewEmployeeForm() {
                   )}
                 />
                 <FormField
+                  control={form.control}
                   name="dob"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
@@ -238,6 +243,7 @@ export function NewEmployeeForm() {
                   )}
                 />
                 <FormField
+                  control={form.control}
                   name="gender"
                   render={({ field }) => (
                     <FormItem>
@@ -262,6 +268,7 @@ export function NewEmployeeForm() {
               </div>
             </div>
             <FormField
+              control={form.control}
               name="address"
               render={({ field }) => (
                 <FormItem>
@@ -285,6 +292,7 @@ export function NewEmployeeForm() {
           <TabsContent value="job" className="space-y-4 pt-4">
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
+                control={form.control}
                 name="department"
                 render={({ field }) => (
                   <FormItem>
@@ -311,6 +319,7 @@ export function NewEmployeeForm() {
                 )}
               />
               <FormField
+                control={form.control}
                 name="designation"
                 render={({ field }) => (
                   <FormItem>
@@ -323,6 +332,7 @@ export function NewEmployeeForm() {
                 )}
               />
               <FormField
+                control={form.control}
                 name="employmentType"
                 render={({ field }) => (
                   <FormItem>
@@ -345,6 +355,7 @@ export function NewEmployeeForm() {
                 )}
               />
               <FormField
+                control={form.control}
                 name="hireDate"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
@@ -376,6 +387,7 @@ export function NewEmployeeForm() {
                 )}
               />
               <FormField
+                control={form.control}
                 name="reportingTo"
                 render={({ field }) => (
                   <FormItem>
@@ -398,6 +410,7 @@ export function NewEmployeeForm() {
                 )}
               />
               <FormField
+                control={form.control}
                 name="workLocation"
                 render={({ field }) => (
                   <FormItem>
@@ -432,6 +445,7 @@ export function NewEmployeeForm() {
           <TabsContent value="banking" className="space-y-4 pt-4">
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
+                control={form.control}
                 name="accountNumber"
                 render={({ field }) => (
                   <FormItem>
@@ -444,6 +458,7 @@ export function NewEmployeeForm() {
                 )}
               />
               <FormField
+                control={form.control}
                 name="bankName"
                 render={({ field }) => (
                   <FormItem>
@@ -456,6 +471,7 @@ export function NewEmployeeForm() {
                 )}
               />
               <FormField
+                control={form.control}
                 name="branchName"
                 render={({ field }) => (
                   <FormItem>
@@ -468,6 +484,7 @@ export function NewEmployeeForm() {
                 )}
               />
               <FormField
+                control={form.control}
                 name="ifscCode"
                 render={({ field }) => (
                   <FormItem>
@@ -492,6 +509,7 @@ export function NewEmployeeForm() {
           <TabsContent value="tax" className="space-y-4 pt-4">
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
+                control={form.control}
                 name="nationalId"
                 render={({ field }) => (
                   <FormItem>
@@ -504,6 +522,7 @@ export function NewEmployeeForm() {
                 )}
               />
               <FormField
+                control={form.control}
                 name="taxNumber"
                 render={({ field }) => (
                   <FormItem>
@@ -516,6 +535,7 @@ export function NewEmployeeForm() {
                 )}
               />
               <FormField
+                control={form.control}
                 name="pensionNumber"
                 render={({ field }) => (
                   <FormItem>
@@ -528,6 +548,7 @@ export function NewEmployeeForm() {
                 )}
               />
               <FormField
+                control={form.control}
                 name="taxStatus"
                 render={({ field }) => (
                   <FormItem>

@@ -2,6 +2,8 @@ import { Routes, Route, Navigate } from "react-router-dom"
 import { PayrollGenerate } from "@/components/payroll-generate"
 import { PayrollStructures } from "@/components/payroll-structures"
 import { PayrollHistory } from "@/components/payroll-history"
+import PayrollStructureNewPage from "./PayrollStructureNewPage"
+import PayrollStructureEditPage from "./PayrollStructureEditPage"
 
 export default function PayrollPage() {
   return (
@@ -9,6 +11,8 @@ export default function PayrollPage() {
       <Route path="/" element={<Navigate to="/payroll/generate" replace />} />
       <Route path="/generate" element={<PayrollGenerate />} />
       <Route path="/structures" element={<PayrollStructures />} />
+      <Route path="/structures/new" element={<PayrollStructureNewPage />} />
+      <Route path="/structures/:id/edit" element={<PayrollStructureEditPage />} />
       <Route path="/history" element={<PayrollHistory />} />
     </Routes>
   )

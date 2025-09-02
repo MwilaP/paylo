@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "react-router-dom"
 import { CalendarIcon, Upload } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -31,7 +31,7 @@ interface EmployeeFormProps {
 
 export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProps) {
   const [activeTab, setActiveTab] = useState("personal")
-  const router = useRouter()
+  const navigate = useNavigate()
   const { toast } = useToast()
 
   // Services state
@@ -252,7 +252,7 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
       }
 
       console.log("Employee data saved successfully")
-      router.push("/employees")
+      navigate("/employees")
     } catch (error) {
       console.error("Error saving employee:", error)
       toast({
@@ -420,7 +420,7 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => router.push("/employees")}>
+              <Button type="button" variant="outline" onClick={() => navigate("/employees")}>
                 Cancel
               </Button>
               <Button type="button" onClick={() => setActiveTab("job")}>
@@ -775,7 +775,7 @@ export function EmployeeForm({ employeeId, isEditing = false }: EmployeeFormProp
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => router.push(`/payroll/structures/${formData.payrollStructureId}/edit`)}
+                        onClick={() => navigate(`/payroll/structures/${formData.payrollStructureId}/edit`)}
                         disabled={!formData.payrollStructureId}
                       >
                         View Full Structure Details

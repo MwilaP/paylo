@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "react-router-dom"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -10,7 +10,7 @@ import { UserPlus } from "lucide-react"
 import { useDatabase } from "@/lib/db/db-context"
 
 export function RecentEmployees() {
-  const router = useRouter()
+  const navigate = useNavigate()
   const { employeeService, isLoading } = useDatabase()
   const [employees, setEmployees] = useState<any[]>([])
 
@@ -38,11 +38,11 @@ export function RecentEmployees() {
   }, [employeeService])
 
   const handleViewEmployee = (id: string) => {
-    router.push(`/employees/${id}`)
+    navigate(`/employees/${id}`)
   }
 
   const handleAddEmployee = () => {
-    router.push("/employees/new")
+    navigate("/employees/new")
   }
 
   // Empty state component

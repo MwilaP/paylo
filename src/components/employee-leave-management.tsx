@@ -12,7 +12,7 @@ import {
   calculateAvailableLeave
 } from "@/lib/utils/leave-calculations"
 import { Download, Mail, Printer, ArrowLeft, FileText, CheckCircle, AlertCircle } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "react-router-dom"
 import {
   Table,
   TableBody,
@@ -39,7 +39,7 @@ export default function EmployeeLeaveManagement({ id }: { id: string }) {
   const [leaveHistory, setLeaveHistory] = useState<LeaveHistory[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
-  const router = useRouter()
+  const navigate = useNavigate()
   const [showRequestForm, setShowRequestForm] = useState(false)
 
   const handleLeaveRequestSuccess = (newLeave: LeaveHistory) => {
@@ -120,7 +120,7 @@ export default function EmployeeLeaveManagement({ id }: { id: string }) {
 
   return (
     <div className="container mx-auto py-6 space-y-8">
-      <Button variant="ghost" size="sm" onClick={() => router.back()}>
+      <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
         <ArrowLeft className="h-4 w-4 mr-2" />
         Back
       </Button>

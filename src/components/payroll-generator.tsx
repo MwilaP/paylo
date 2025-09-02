@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import { Link } from "react-router-dom"
 import { v4 as uuidv4 } from "uuid"
 import { useState, useEffect } from "react"
 import {
@@ -10,7 +10,7 @@ import {
   savePayrollHistory
 } from "@/lib/db/services/service-factory"
 import type { PayrollHistory } from "@/lib/db/models/payroll-history.model"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "react-router-dom"
 import { CalendarIcon, CreditCard, Download, Search } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -33,7 +33,7 @@ export function PayrollGenerator() {
   const [employeeData, setEmployeeData] = useState<Array<any>>([])
   const [payrollStructures, setPayrollStructures] = useState<Array<any>>([])
   const [isLoading, setIsLoading] = useState(true)
-  const router = useRouter()
+  const navigate = useNavigate()
   const { toast } = useToast()
 
   // Fetch payroll structures on component mount
@@ -208,7 +208,7 @@ export function PayrollGenerator() {
         description: `Payroll for ${format(date, "MMMM yyyy")} has been generated for ${selectedEmployees.length} employees.`,
       })
 
-      router.push("/payroll")
+      navigate("/payroll")
     } catch (error) {
       console.error("Error generating payroll:", error)
       toast({

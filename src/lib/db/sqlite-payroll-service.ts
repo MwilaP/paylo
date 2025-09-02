@@ -35,6 +35,8 @@ export interface SQLitePayrollStructureService {
 export const createSQLitePayrollStructureService = (): SQLitePayrollStructureService => {
   return {
     async create(structureData, allowancesData = [], deductionsData = []) {
+      console.log("Core SQLite service create called with:", { structureData, allowancesData, deductionsData });
+      
       return sqliteOperations.transaction(async (ops) => {
         // Create the main structure
         const structure: SQLitePayrollStructure = {
@@ -44,8 +46,12 @@ export const createSQLitePayrollStructureService = (): SQLitePayrollStructureSer
           updated_at: new Date().toISOString(),
         }
 
+        console.log("Structure before validation:", structure);
         const validatedStructure = sqlitePayrollStructureSchema.parse(structure)
+        console.log("Validated structure:", validatedStructure);
+        
         const createdStructure = await ops.create('payroll_structures', validatedStructure)
+        console.log("Created structure:", createdStructure);
 
         // Create allowances
         const allowances: SQLiteAllowance[] = []
@@ -237,13 +243,17 @@ export const createPayrollStructureServiceCompat = () => {
   
   return {
     async create(structureData: any) {
+      console.log("SQLite service create called with:", structureData);
+      
       // Convert PouchDB format to SQLite format
       const sqliteStructureData = {
         name: structureData.name,
         description: structureData.description,
         frequency: structureData.frequency,
-        basic_salary: structureData.basicSalary,
+        basic_salary: structureData.basicSalary || structureData.basic_salary,
       }
+      
+      console.log("Converted to SQLite format:", sqliteStructureData);
 
       const allowancesData = (structureData.allowances || []).map((allowance: any) => ({
         name: allowance.name,
@@ -258,8 +268,15 @@ export const createPayrollStructureServiceCompat = () => {
         pre_tax: deduction.preTax,
       }))
 
+      console.log("Calling sqliteService.create with:", { sqliteStructureData, allowancesData, deductionsData });
+      
       const result = await sqliteService.create(sqliteStructureData, allowancesData, deductionsData)
-      return convertSQLiteToPouchDB.payrollStructure(result.structure, result.allowances, result.deductions)
+      console.log("SQLite service result:", result);
+      
+      const convertedResult = convertSQLiteToPouchDB.payrollStructure(result.structure, result.allowances, result.deductions)
+      console.log("Converted result:", convertedResult);
+      
+      return convertedResult
     },
 
     async getById(id: string) {

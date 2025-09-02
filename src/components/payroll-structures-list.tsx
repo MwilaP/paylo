@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "react-router-dom"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,7 +15,7 @@ import { AssignStructureModal } from "./assign-structure-modal"
 import { useDatabase } from "@/lib/db/db-context"
 
 export function PayrollStructuresList() {
-  const router = useRouter()
+  const navigate = useNavigate()
   const { payrollStructureService, isLoading } = useDatabase()
   const [structures, setStructures] = useState<any[]>([])
   const [filteredStructures, setFilteredStructures] = useState<any[]>([])
@@ -65,11 +65,11 @@ export function PayrollStructuresList() {
   }
 
   const handleCreateStructure = () => {
-    router.push("/payroll/structures/new")
+    navigate("/payroll/structures/new")
   }
 
   const handleEditStructure = (id: string) => {
-    router.push(`/payroll/structures/${id}/edit`)
+    navigate(`/payroll/structures/${id}/edit`)
   }
 
   const handleAssignStructure = (structure: any) => {

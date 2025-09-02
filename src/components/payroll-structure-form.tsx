@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "react-router-dom"
 import { Minus, Plus, Save, Loader2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -14,12 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { PayrollStructureSummary } from "./payroll-structure-summary"
-import {
-  createPayrollStructure,
-  getPayrollStructure,
-  updatePayrollStructure,
-  PayrollStructureDocument
-} from "@/lib/services/payroll-structure-service"
+import { createPayrollStructureServiceCompat } from "@/lib/db/sqlite-payroll-service"
 import { initializeSQLiteDatabase } from "@/lib/db/indexeddb-sqlite-service"
 import { calculateTaxDeduction, calculateNapsaContribution } from "@/lib/utils/payroll-calculations"
 
@@ -43,11 +38,14 @@ interface PayrollStructureFormProps {
 }
 
 export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
-  const router = useRouter()
+  const navigate = useNavigate()
   const { toast } = useToast()
   const isEditing = !!id
   const [isLoading, setIsLoading] = useState(false)
   const [dbInitialized, setDbInitialized] = useState(false)
+  
+  // Create SQLite service instance
+  const payrollService = createPayrollStructureServiceCompat()
 
   // Form state
   const [name, setName] = useState("")
@@ -154,7 +152,7 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
       const fetchPayrollStructure = async () => {
         try {
           setIsLoading(true);
-          const structure = await getPayrollStructure(id);
+          const structure = await payrollService.getById(id);
 
           if (structure) {
             setName(structure.name);
@@ -169,7 +167,7 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
               description: "The requested payroll structure could not be found.",
               variant: "destructive",
             });
-            router.push("/payroll/structures");
+            navigate("/payroll/structures");
           }
         } catch (error) {
           console.error("Error fetching payroll structure:", error);
@@ -185,7 +183,7 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
 
       fetchPayrollStructure();
     }
-  }, [isEditing, id, dbInitialized, router, toast]);
+  }, [isEditing, id, dbInitialized, toast]);
 
   // Handlers for allowances
   const addAllowance = () => {
@@ -274,14 +272,23 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
 
       if (isEditing) {
         // Update existing structure
-        await updatePayrollStructure(id, payrollStructureData);
+        await payrollService.update(id, payrollStructureData);
         toast({
           title: "Structure updated",
           description: "The payroll structure has been updated successfully.",
         });
       } else {
         // Create new structure
-        const result = await createPayrollStructure(payrollStructureData);
+        console.log("Creating payroll structure with data:", payrollStructureData);
+        console.log("Database initialized:", dbInitialized);
+        
+        if (!dbInitialized) {
+          throw new Error("Database not initialized");
+        }
+        
+        const result = await payrollService.create(payrollStructureData);
+        console.log("Create result:", result);
+        
         if (!result) {
           throw new Error("Failed to create payroll structure");
         }
@@ -291,7 +298,7 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
         });
       }
 
-      router.push("/payroll/structures");
+      navigate("/payroll/structures");
     } catch (error) {
       console.error("Error saving payroll structure:", error);
       toast({
@@ -570,7 +577,7 @@ export function PayrollStructureForm({ id }: PayrollStructureFormProps = {}) {
           </Card>
 
           <div className="mt-6 flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => router.push("/payroll/structures")}>
+            <Button type="button" variant="outline" onClick={() => navigate("/payroll/structures")}>
               Cancel
             </Button>
             <Button type="submit" disabled={isLoading}>

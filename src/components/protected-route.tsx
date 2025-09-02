@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/lib/auth-context"
 
 interface ProtectedRouteProps {
@@ -10,7 +10,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading } = useAuth()
-  const router = useRouter()
+  const navigate = useNavigate()
 
   useEffect(() => {
     // If authentication is still loading, wait
@@ -18,9 +18,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
     // If not authenticated, redirect to login
     if (!isAuthenticated) {
-      router.push("/login")
+      navigate("/login")
     }
-  }, [isAuthenticated, isLoading, router])
+  }, [isAuthenticated, isLoading, navigate])
 
   // Show nothing while loading or redirecting
   if (isLoading || !isAuthenticated) {

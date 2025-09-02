@@ -1,9 +1,9 @@
-import { NewEmployeeForm } from "@/components/new-employee-form"
+import { EmployeeForm } from "@/components/employee-form"
 
 export default function EmployeeNewPage() {
   return (
     <div className="space-y-6">
-      <NewEmployeeForm />
+      <EmployeeForm />
     </div>
   )
 }

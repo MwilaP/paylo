@@ -1,14 +1,14 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "react-router-dom"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { CalendarDays, DollarSign } from "lucide-react"
 import { useDatabase } from "@/lib/db/db-context"
 
 export function UpcomingPayroll() {
-  const router = useRouter()
+  const navigate = useNavigate()
   const { payrollHistoryService, isLoading } = useDatabase()
   const [upcomingPayrolls, setUpcomingPayrolls] = useState<any[]>([])
 
@@ -35,7 +35,7 @@ export function UpcomingPayroll() {
   }, [payrollHistoryService])
 
   const handleGeneratePayroll = () => {
-    router.push("/payroll/generate")
+    navigate("/payroll/generate")
   }
 
   // Empty state component
@@ -89,7 +89,7 @@ export function UpcomingPayroll() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <div className="text-sm font-medium">${payroll.totalAmount?.toLocaleString() || "0"}</div>
-                  <Button variant="ghost" size="sm" onClick={() => router.push(`/payroll/history/${payroll._id}`)}>
+                  <Button variant="ghost" size="sm" onClick={() => navigate(`/payroll/history/${payroll._id}`)}>
                     View
                   </Button>
                 </div>
