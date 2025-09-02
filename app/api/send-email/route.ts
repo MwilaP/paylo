@@ -23,12 +23,16 @@ export async function POST(req: Request) {
     });
     */
 
-    // Gmail Configuration
+    // Email Configuration using environment variables
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+      throw new Error('Email configuration is missing. Please check your environment variables.');
+    }
+
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: 'wilamotorsfinance@gmail.com', // Replace with your Gmail
-        pass: 'eeco fjit wela izby'  // Replace with your Gmail App Password
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD
       }
     });
 
