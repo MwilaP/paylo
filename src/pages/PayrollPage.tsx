@@ -5,7 +5,7 @@ import { Link, Routes, Route, Navigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CalendarDays, CreditCard, DollarSign, Users, FileText, BarChart, RefreshCw } from "lucide-react"
+import { CalendarDays, CreditCard, DollarSign, Users, FileText, BarChart, RefreshCw, Upload } from "lucide-react"
 import { PayrollGenerate } from "@/components/payroll-generate"
 import { PayrollStructures } from "@/components/payroll-structures"
 import { PayrollHistory } from "@/components/payroll-history"
@@ -13,6 +13,7 @@ import { PayrollSettings } from "@/components/payroll-settings"
 import PayrollStructureNewPage from "./PayrollStructureNewPage"
 import PayrollStructureEditPage from "./PayrollStructureEditPage"
 import PayrollHistoryDetailPage from "./PayrollHistoryDetailPage"
+import PayrollImportPage from "./PayrollImportPage"
 import { format } from "date-fns"
 import { payrollHistoryService } from "@/lib/db/services/payroll-history.service"
 import { useDatabase } from "@/lib/db/db-context"
@@ -116,6 +117,12 @@ function PayrollDashboard() {
             <Link to="/payroll/structures">
               <FileText className="mr-2 h-4 w-4" />
               Manage Structures
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/payroll/import">
+              <Upload className="mr-2 h-4 w-4" />
+              Import Payroll
             </Link>
           </Button>
           <Button asChild>
@@ -229,6 +236,7 @@ export default function PayrollPage() {
       <Route path="/structures/:id/edit" element={<PayrollStructureEditPage />} />
       <Route path="/history" element={<PayrollHistory />} />
       <Route path="/history/:id" element={<PayrollHistoryDetailPage />} />
+      <Route path="/import" element={<PayrollImportPage />} />
     </Routes>
   )
 }

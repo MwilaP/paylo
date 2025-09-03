@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { ArrowLeft, Download, Mail, FileText, DollarSign } from "lucide-react"
+import { ArrowLeft, Download, Mail, FileText, DollarSign, ChevronDown, ChevronRight } from "lucide-react"
 import { getPayrollHistoryService } from "@/lib/db/services/service-factory"
 import { useToast } from "@/hooks/use-toast"
 import { format } from "date-fns"
@@ -32,6 +32,7 @@ export default function PayrollHistoryDetailPage() {
   const [payrollRecord, setPayrollRecord] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const loadPayrollRecord = async () => {
@@ -80,10 +81,106 @@ export default function PayrollHistoryDetailPage() {
   }
 
   const handleExportPayroll = () => {
-    toast({
-      title: "Export Started",
-      description: "Payroll export will be available shortly.",
-    })
+    if (!payrollRecord || !payrollRecord.items) {
+      toast({
+        title: "Export Failed",
+        description: "No payroll data available to export.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      // Create payroll data in the requested format
+      const exportData = payrollRecord.items.map((item: any) => {
+        // Extract loan and other specific deductions from deduction breakdown
+        let loanDeduction = 0
+        let otherDeductions = 0
+        
+        // Process deduction breakdown if available
+        if (item.deductionBreakdown && Array.isArray(item.deductionBreakdown)) {
+          item.deductionBreakdown.forEach((deduction: any) => {
+            // Skip standard deductions that already have their own columns
+            if (deduction.name.toLowerCase().includes('napsa') || 
+                deduction.name.toLowerCase().includes('nhima') || 
+                deduction.name.toLowerCase().includes('paye')) {
+              return
+            }
+            
+            // Extract loan deductions
+            if (deduction.name.toLowerCase().includes('loan')) {
+              loanDeduction += (typeof deduction.value === 'number') ? deduction.value : 0
+            } else {
+              // Accumulate other deductions
+              otherDeductions += (typeof deduction.value === 'number') ? deduction.value : 0
+            }
+          })
+        }
+        
+        return {
+          'EMPLOYEE NAME': item.employeeName || 'Unknown Employee',
+          'ACCOUNT NUMBER': item.accountNumber || '',
+          'NRC': item.nrc || '',
+          'TPIN': item.tpin || '',
+          'BASIC PAY': item.basicSalary || 0,
+          'Housing Allow.': item.housingAllowance || 0,
+          'Transport Allow.': item.transportAllowance || 0,
+          'GROSS PAY': item.grossPay || 0,
+          'Napsa': item.napsa || 0,
+          'Nhima': item.nhima || 0,
+          'PAYE': item.paye || 0,
+          'Loan': loanDeduction,
+          'Other Deductions': otherDeductions,
+          'NET': item.netSalary || 0
+        }
+      })
+      
+      // Convert to CSV
+      const headers = [
+        'EMPLOYEE NAME', 'ACCOUNT NUMBER', 'NRC', 'TPIN', 'BASIC PAY', 
+        'Housing Allow.', 'Transport Allow.', 'GROSS PAY', 'Napsa', 
+        'Nhima', 'PAYE', 'Loan', 'Other Deductions', 'NET'
+      ]
+      
+      const csvContent = [
+        headers.join(','),
+        ...exportData.map((row: Record<string, any>) => 
+          headers.map(header => {
+            const value = row[header]
+            // Handle values that might contain commas
+            if (typeof value === 'string' && value.includes(',')) {
+              return `"${value}"`
+            }
+            return value
+          }).join(',')
+        )
+      ].join('\n')
+      
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      
+      const fileName = `payroll_${payrollRecord.period || 'monthly'}_${payrollRecord.date ? new Date(payrollRecord.date).toISOString().split('T')[0] : 'unknown'}.csv`
+      link.setAttribute('download', fileName)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      toast({
+        title: "Export Successful",
+        description: `Payroll exported as ${fileName}`,
+      })
+    } catch (error) {
+      console.error('Export error:', error)
+      toast({
+        title: "Export Failed",
+        description: "An error occurred while exporting the payroll data.",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleEmailPayslips = () => {
@@ -91,6 +188,16 @@ export default function PayrollHistoryDetailPage() {
       title: "Email Sent",
       description: "Payslips have been sent to all employees.",
     })
+  }
+
+  const toggleRowExpansion = (employeeId: string) => {
+    const newExpanded = new Set(expandedRows)
+    if (newExpanded.has(employeeId)) {
+      newExpanded.delete(employeeId)
+    } else {
+      newExpanded.add(employeeId)
+    }
+    setExpandedRows(newExpanded)
   }
 
   if (isLoading) {
@@ -234,6 +341,7 @@ export default function PayrollHistoryDetailPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8"></TableHead>
                     <TableHead>Employee</TableHead>
                     <TableHead>Basic Salary</TableHead>
                     <TableHead>Allowances</TableHead>
@@ -242,19 +350,137 @@ export default function PayrollHistoryDetailPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {payrollRecord.items.map((item: any, index: number) => (
-                    <TableRow key={item.employeeId || index}>
-                      <TableCell className="font-medium">
-                        {item.employeeName || `Employee ${index + 1}`}
-                      </TableCell>
-                      <TableCell>K{item.basicSalary?.toLocaleString() || "0"}</TableCell>
-                      <TableCell>K{item.allowances?.toLocaleString() || "0"}</TableCell>
-                      <TableCell>K{item.deductions?.toLocaleString() || "0"}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        K{item.netSalary?.toLocaleString() || "0"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {payrollRecord.items.map((item: any, index: number) => {
+                    const employeeId = item.employeeId || `employee_${index}`
+                    const isExpanded = expandedRows.has(employeeId)
+                    
+                    return (
+                      <>
+                        <TableRow key={employeeId} className="cursor-pointer hover:bg-muted/50" onClick={() => toggleRowExpansion(employeeId)}>
+                          <TableCell>
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {item.employeeName || `Employee ${index + 1}`}
+                          </TableCell>
+                          <TableCell>K{item.basicSalary?.toLocaleString() || "0"}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span>K{item.allowances?.toLocaleString() || "0"}</span>
+                              {item.allowanceBreakdown && item.allowanceBreakdown.length > 0 && (
+                                <Badge variant="outline" className="text-xs">
+                                  {item.allowanceBreakdown.length} items
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span>K{item.deductions?.toLocaleString() || "0"}</span>
+                              {item.deductionBreakdown && item.deductionBreakdown.length > 0 && (
+                                <Badge variant="outline" className="text-xs">
+                                  {item.deductionBreakdown.length} items
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            K{item.netSalary?.toLocaleString() || "0"}
+                          </TableCell>
+                        </TableRow>
+                        {isExpanded && (
+                          <TableRow key={`${employeeId}_details`}>
+                            <TableCell colSpan={6} className="bg-muted/30 p-0">
+                              <div className="p-4 space-y-4">
+                                <div className="grid md:grid-cols-2 gap-4">
+                                  {/* Allowances Breakdown */}
+                                  <div>
+                                    <h4 className="font-medium text-sm mb-2 text-green-700">Allowances Breakdown</h4>
+                                    {item.allowanceBreakdown && item.allowanceBreakdown.length > 0 ? (
+                                      <div className="space-y-1">
+                                        {item.allowanceBreakdown.map((allowance: any, idx: number) => (
+                                          <div key={idx} className="flex justify-between text-sm">
+                                            <span className="text-muted-foreground">{allowance.name}</span>
+                                            <span className="font-medium text-green-700">
+                                              +K{allowance.value?.toLocaleString() || "0"}
+                                              {allowance.type === "percentage" && ` (${allowance.percentage}%)`}
+                                            </span>
+                                          </div>
+                                        ))}
+                                        <Separator className="my-2" />
+                                        <div className="flex justify-between text-sm font-medium">
+                                          <span>Total Allowances</span>
+                                          <span className="text-green-700">+K{item.allowances?.toLocaleString() || "0"}</span>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-sm text-muted-foreground">No allowances</p>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Deductions Breakdown */}
+                                  <div>
+                                    <h4 className="font-medium text-sm mb-2 text-red-700">Deductions Breakdown</h4>
+                                    {item.deductionBreakdown && item.deductionBreakdown.length > 0 ? (
+                                      <div className="space-y-1">
+                                        {item.deductionBreakdown.map((deduction: any, idx: number) => (
+                                          <div key={idx} className="flex justify-between text-sm">
+                                            <span className="text-muted-foreground">
+                                              {deduction.name}
+                                              {deduction.preTax && <span className="text-xs text-blue-600 ml-1">(Pre-tax)</span>}
+                                            </span>
+                                            <span className="font-medium text-red-700">
+                                              -K{deduction.value?.toLocaleString() || "0"}
+                                              {deduction.type === "percentage" && ` (${deduction.percentage}%)`}
+                                            </span>
+                                          </div>
+                                        ))}
+                                        <Separator className="my-2" />
+                                        <div className="flex justify-between text-sm font-medium">
+                                          <span>Total Deductions</span>
+                                          <span className="text-red-700">-K{item.deductions?.toLocaleString() || "0"}</span>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-sm text-muted-foreground">No deductions</p>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                {/* Salary Calculation Summary */}
+                                <div className="bg-background rounded-lg p-3 border">
+                                  <h4 className="font-medium text-sm mb-2">Salary Calculation</h4>
+                                  <div className="space-y-1 text-sm">
+                                    <div className="flex justify-between">
+                                      <span>Basic Salary</span>
+                                      <span>K{item.basicSalary?.toLocaleString() || "0"}</span>
+                                    </div>
+                                    <div className="flex justify-between text-green-700">
+                                      <span>+ Total Allowances</span>
+                                      <span>K{item.allowances?.toLocaleString() || "0"}</span>
+                                    </div>
+                                    <div className="flex justify-between text-red-700">
+                                      <span>- Total Deductions</span>
+                                      <span>K{item.deductions?.toLocaleString() || "0"}</span>
+                                    </div>
+                                    <Separator className="my-2" />
+                                    <div className="flex justify-between font-medium text-base">
+                                      <span>Net Salary</span>
+                                      <span>K{item.netSalary?.toLocaleString() || "0"}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </>
+                    )
+                  })}
                 </TableBody>
               </Table>
             </div>

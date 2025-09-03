@@ -64,7 +64,11 @@ export function PayrollGenerator() {
 
         // Enhance employees with payroll structure data
         const enhancedEmployees = employees.map((employee: any) => {
-          const structure = employee.payrollStructureId ? structuresMap[employee.payrollStructureId] : null
+          console.log("Employee data:", employee)
+          console.log("Employee payroll structure ID:", employee.payrollStructureId, employee.payroll_structure_id)
+          
+          const structureId = employee.payrollStructureId || employee.payroll_structure_id
+          const structure = structureId ? structuresMap[structureId] : null
 
 
 
@@ -81,7 +85,9 @@ export function PayrollGenerator() {
 
           const employeesStructures = cal()
 
-          console.log("CALCULATOR", employeesStructures)
+          console.log("CALCULATOR for", employee.firstName, employee.lastName, ":", employeesStructures)
+          console.log("Structure data:", structure)
+          console.log("Basic salary:", basicSalary)
 
           const allowancesTotal = employeesStructures ? employeesStructures?.totalAllowances : 0
           const deductionsTotal = employeesStructures ? employeesStructures?.totalDeductions : 0
@@ -169,17 +175,123 @@ export function PayrollGenerator() {
         selectedEmployees.includes(employee._id)
       )
 
-      // Create payroll items from selected employees
-      const payrollItems = selectedEmployeeData.map(employee => ({
-        employeeId: employee._id,
-        employeeName: `${employee.firstName || ''} ${employee.lastName || ''}`,
-        department: employee.department || 'General',
-        basicSalary: employee.baseSalary || 0,
-        allowances: employee.allowances || 0,
-        deductions: employee.deductions || 0,
-        netSalary: employee.netSalary || 0,
-        payrollStructureId: employee.payrollStructureId || ''
-      }))
+      // Create payroll items from selected employees with detailed breakdown
+      const payrollItems = selectedEmployeeData.map(employee => {
+        const basicSalary = employee.baseSalary || 0
+        const payrollStructure = employee.payrollStructure
+        
+        // Use the same calculation logic as the data loading
+        let housingAllowance = 0
+        let transportAllowance = 0
+        let napsa = 0
+        let nhima = 0
+        let paye = 0
+        let allowanceBreakdown = []
+        let deductionBreakdown = []
+        
+        if (payrollStructure) {
+          // Debug logging
+          console.log("Employee:", employee.firstName, employee.lastName)
+          console.log("Basic Salary:", basicSalary)
+          console.log("Payroll Structure:", payrollStructure)
+          console.log("Allowances:", payrollStructure.allowances)
+          console.log("Deductions:", payrollStructure.deductions)
+          
+          // Calculate using the same function as data loading
+          const salaryCalculation = calculateNetSalary(basicSalary, payrollStructure.allowances || [], payrollStructure.deductions || [])
+          console.log("Salary Calculation Result:", salaryCalculation)
+          
+          // Extract individual allowances
+          if (payrollStructure.allowances) {
+            allowanceBreakdown = payrollStructure.allowances.map((allowance: any) => {
+              const amount = allowance.type === "percentage" 
+                ? (basicSalary * allowance.value) / 100 
+                : allowance.value || 0
+              
+              // Identify specific allowances by name
+              if (allowance.name.toLowerCase().includes('housing')) {
+                housingAllowance = amount
+              }
+              if (allowance.name.toLowerCase().includes('transport')) {
+                transportAllowance = amount
+              }
+              
+              return { ...allowance, value: amount }
+            })
+          }
+          
+          // Extract individual deductions
+          if (payrollStructure.deductions) {
+            deductionBreakdown = payrollStructure.deductions.map((deduction: any) => {
+              const grossPay = salaryCalculation.grossSalary
+              const amount = deduction.type === "percentage" 
+                ? (grossPay * deduction.value) / 100 
+                : deduction.value || 0
+              
+              // Identify specific deductions by name
+              if (deduction.name.toLowerCase().includes('napsa')) {
+                napsa = amount
+              }
+              if (deduction.name.toLowerCase().includes('nhima')) {
+                nhima = amount
+              }
+              if (deduction.name.toLowerCase().includes('paye')) {
+                paye = amount
+              }
+              
+              return { ...deduction, value: amount }
+            })
+          }
+          
+          return {
+            employeeId: employee._id,
+            employeeName: `${employee.firstName || ''} ${employee.lastName || ''}`.trim(),
+            accountNumber: employee.accountNumber || employee.account_number || '',
+            nrc: employee.nationalId || employee.national_id || '',
+            tpin: employee.taxNumber || employee.tax_number || '',
+            department: employee.department || 'General',
+            basicSalary: basicSalary,
+            housingAllowance: housingAllowance,
+            transportAllowance: transportAllowance,
+            grossPay: salaryCalculation.grossSalary,
+            napsa: napsa,
+            nhima: nhima,
+            paye: paye,
+            totalDeductions: salaryCalculation.totalDeductions,
+            netSalary: salaryCalculation.netSalary,
+            payrollStructureId: employee.payrollStructureId || '',
+            // Keep detailed breakdown for expandable view
+            allowanceBreakdown: allowanceBreakdown,
+            deductionBreakdown: deductionBreakdown,
+            allowances: salaryCalculation.totalAllowances,
+            deductions: salaryCalculation.totalDeductions
+          }
+        }
+        
+        // Fallback for employees without payroll structure
+        return {
+          employeeId: employee._id,
+          employeeName: `${employee.firstName || ''} ${employee.lastName || ''}`.trim(),
+          accountNumber: employee.accountNumber || employee.account_number || '',
+          nrc: employee.nationalId || employee.national_id || '',
+          tpin: employee.taxNumber || employee.tax_number || '',
+          department: employee.department || 'General',
+          basicSalary: basicSalary,
+          housingAllowance: 0,
+          transportAllowance: 0,
+          grossPay: basicSalary,
+          napsa: 0,
+          nhima: 0,
+          paye: 0,
+          totalDeductions: 0,
+          netSalary: basicSalary,
+          payrollStructureId: employee.payrollStructureId || '',
+          allowanceBreakdown: [],
+          deductionBreakdown: [],
+          allowances: 0,
+          deductions: 0
+        }
+      })
 
       // Calculate total amount as the sum of all net salaries
       const totalAmount = payrollItems.reduce((sum, item) => sum + item.netSalary, 0)

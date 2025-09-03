@@ -18,11 +18,30 @@ export const sqlitePayrollHistorySchema = z.object({
   items: z.array(z.object({
     employeeId: z.string(),
     employeeName: z.string(),
+    // Employee details
+    accountNumber: z.string().optional(),
+    nrc: z.string().optional(),
+    tpin: z.string().optional(),
+    department: z.string().optional(),
+    // Salary components
     basicSalary: z.number(),
+    housingAllowance: z.number().optional(),
+    transportAllowance: z.number().optional(),
+    grossPay: z.number().optional(),
+    // Deduction components
+    napsa: z.number().optional(),
+    nhima: z.number().optional(),
+    paye: z.number().optional(),
+    // Totals
     allowances: z.number(),
     deductions: z.number(),
+    totalDeductions: z.number().optional(),
     netSalary: z.number(),
+    // Structure reference
     payrollStructureId: z.string().optional(),
+    // Detailed breakdowns
+    allowanceBreakdown: z.array(z.any()).optional(),
+    deductionBreakdown: z.array(z.any()).optional(),
   })).optional(),
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
