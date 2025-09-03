@@ -4,10 +4,20 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { DollarSign, Download, Eye, FileText, Mail } from "lucide-react"
+import { DollarSign, Download, Eye, FileText, Mail, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
 import { useDatabase } from "@/lib/db/db-context"
 import { getPayrollHistoryService } from "@/lib/db/services/service-factory"
 import { useToast } from "@/hooks/use-toast"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 export function PayrollHistory() {
   const navigate = useNavigate()
   //const { isLoading } = useDatabase()
@@ -16,7 +26,13 @@ export function PayrollHistory() {
   const [serviceError, setServiceError] = useState<string | null>(null)
 
   const [isLoading, setIsLoading] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [payrollHistory, setPayrollHistory] = useState<any[]>([])
+  const [payrollToDelete, setPayrollToDelete] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const itemsPerPage = 20
   const { toast } = useToast()
 
 
@@ -52,6 +68,7 @@ export function PayrollHistory() {
       if (!payrollHistoryService) return
 
       try {
+        setIsLoading(true)
         const data = await payrollHistoryService.getAllPayrollRecords()
         // Sort by date (newest first)
         const sorted = [...data].sort((a, b) => {
@@ -59,9 +76,14 @@ export function PayrollHistory() {
         })
         console.log("payroll-history", sorted)
         setPayrollHistory(sorted)
+        
+        // Calculate total pages
+        setTotalPages(Math.max(1, Math.ceil(sorted.length / itemsPerPage)))
       } catch (error) {
         console.error("Error loading payroll history:", error)
         setPayrollHistory([])
+      } finally {
+        setIsLoading(false)
       }
     }
 
@@ -70,6 +92,54 @@ export function PayrollHistory() {
 
   const handleGeneratePayroll = () => {
     navigate("/payroll/generate")
+  }
+  
+  const handleDeletePayroll = async () => {
+    if (!payrollToDelete || !payrollHistoryService) return
+    
+    try {
+      setIsDeleting(true)
+      await payrollHistoryService.deletePayrollRecord(payrollToDelete)
+      
+      // Update the list after deletion
+      setPayrollHistory(prev => prev.filter(item => item._id !== payrollToDelete))
+      
+      toast({
+        title: "Success",
+        description: "Payroll record deleted successfully",
+      })
+      
+      // Recalculate total pages
+      const newTotalPages = Math.max(1, Math.ceil((payrollHistory.length - 1) / itemsPerPage))
+      setTotalPages(newTotalPages)
+      
+      // Adjust current page if needed
+      if (currentPage > newTotalPages) {
+        setCurrentPage(newTotalPages)
+      }
+    } catch (error: any) {
+      console.error("Error deleting payroll record:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete payroll record",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleting(false)
+      setDeleteDialogOpen(false)
+      setPayrollToDelete(null)
+    }
+  }
+  
+  const openDeleteDialog = (payrollId: string) => {
+    setPayrollToDelete(payrollId)
+    setDeleteDialogOpen(true)
+  }
+  
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage)
+    }
   }
 
   const getStatusBadge = (status: string) => {
@@ -110,6 +180,12 @@ export function PayrollHistory() {
     </div>
   )
 
+  // Calculate current page items
+  const paginatedPayrollHistory = payrollHistory.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  )
+
   return (
     <Card>
       <CardContent className="p-6">
@@ -118,52 +194,106 @@ export function PayrollHistory() {
         ) : payrollHistory.length === 0 ? (
           <EmptyState />
         ) : (
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Period</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Employees</TableHead>
-                  <TableHead>Total Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {payrollHistory.map((payroll) => (
-                  <TableRow key={payroll._id}>
-                    <TableCell className="font-medium">{payroll.period || "Monthly Payroll"}</TableCell>
-                    <TableCell>{payroll.date ? new Date(payroll.date).toLocaleDateString() : "—"}</TableCell>
-                    <TableCell>{payroll.employeeCount || 0}</TableCell>
-                    <TableCell>K{payroll.totalAmount?.toLocaleString() || "0"}</TableCell>
-                    <TableCell>{getStatusBadge(payroll.status)}</TableCell>
-                    {/* <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => router.push(`/payroll/history/${payroll._id}`)}>
-                        View
-                      </Button>
-                    </TableCell> */}
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" onClick={() => navigate(`/payroll/history/${payroll._id}`)}>
-                          <Eye className="mr-2 h-4 w-4" />
-                          View
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <Download className="mr-2 h-4 w-4" />
-                          Export
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <Mail className="mr-2 h-4 w-4" />
-                          Email All
-                        </Button>
-                      </div>
-                    </TableCell>
+          <>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Employees</TableHead>
+                    <TableHead>Total Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {paginatedPayrollHistory.map((payroll) => (
+                    <TableRow key={payroll._id}>
+                      <TableCell className="font-medium">{payroll.period || "Monthly Payroll"}</TableCell>
+                      <TableCell>{payroll.date ? new Date(payroll.date).toLocaleDateString() : "—"}</TableCell>
+                      <TableCell>{payroll.employeeCount || 0}</TableCell>
+                      <TableCell>K{payroll.totalAmount?.toLocaleString() || "0"}</TableCell>
+                      <TableCell>{getStatusBadge(payroll.status)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" size="sm" onClick={() => navigate(`/payroll/history/${payroll._id}`)}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            View
+                          </Button>
+                          <Button variant="outline" size="sm">
+                            <Download className="mr-2 h-4 w-4" />
+                            Export
+                          </Button>
+                          <Button variant="outline" size="sm">
+                            <Mail className="mr-2 h-4 w-4" />
+                            Email All
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => openDeleteDialog(payroll._id)}
+                            disabled={payroll.status === "processing" || isDeleting}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4 text-red-500" />
+                            Delete
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center space-x-2 mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1 || isLoading}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages || isLoading}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete the payroll record
+                    and all associated data.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={handleDeletePayroll} 
+                    disabled={isDeleting}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
         )}
       </CardContent>
     </Card>

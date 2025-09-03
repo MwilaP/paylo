@@ -27,12 +27,11 @@ export function SidebarProvider({
   // For authenticated pages, show the sidebar
   if (isAuthenticated) {
     return (
-      <div className="flex min-h-screen flex-col">
-        <MainHeader />
-        <div className="flex flex-1">
+      <div className="flex min-h-screen">
+        <div className="fixed left-0 top-0 z-50 h-screen">
           <MainSidebar user={user} />
-          <main className="flex-1 overflow-y-auto bg-muted/30 p-4 md:p-6">{children}</main>
         </div>
+        <main className="flex-1 ml-64 overflow-y-auto bg-muted/30 p-4 md:p-6">{children}</main>
       </div>
     )
   }

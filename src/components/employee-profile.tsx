@@ -17,6 +17,7 @@ import { EmployeePayrollStructure } from "@/components/employee-payroll-structur
 import { Skeleton } from "@/components/ui/skeleton"
 import { createEmployeeServiceCompat } from "@/lib/db/sqlite-employee-service"
 import { createPayrollStructureServiceCompat } from "@/lib/db/sqlite-payroll-service"
+import { createPayrollHistoryServiceCompat } from "@/lib/db/sqlite-payroll-history-service"
 import { useToast } from "@/hooks/use-toast"
 
 export function EmployeeProfile({ id }: { id: string }) {
@@ -183,13 +184,67 @@ export function EmployeeProfile({ id }: { id: string }) {
     fetchStructureAndCalculateSalary();
   }, [employee, payrollStructureService]);
 
-  // TODO: Implement payslips fetching when payroll history service is available
+  // Fetch payslips for the employee
   useEffect(() => {
-    // For now, set empty payslips to avoid errors
-    setPayslips([]);
-    setPayslipsLoading(false);
-    setPayslipsError(null);
-  }, [id]);
+    if (!id || !servicesLoaded) {
+      return;
+    }
+
+    const fetchPayslips = async () => {
+      setPayslipsLoading(true);
+      setPayslipsError(null);
+      
+      try {
+        // Use SQLite payroll history service
+        const payrollHistoryService = createPayrollHistoryServiceCompat();
+        
+        // Get payroll records for this employee
+        const payrollRecords = await payrollHistoryService.getPayrollRecordsByEmployee(id);
+        
+        // Transform payroll records to payslips format
+        const employeePayslips = payrollRecords.map((record) => {
+          // Get the employee item from the record
+          const employeeItem = record.items && record.items.find(item => item.employeeId === id);
+          
+          return {
+            _id: record._id,
+            period: record.period || `${new Date(record.date).toLocaleString('default', { month: 'short' })} ${new Date(record.date).getFullYear()}`,
+            date: record.date,
+            // Basic salary and earnings
+            basicSalary: employeeItem?.basicSalary || 0,
+            housingAllowance: employeeItem?.housingAllowance || 0,
+            transportAllowance: employeeItem?.transportAllowance || 0,
+            allowances: employeeItem?.allowances || 0,
+            allowanceBreakdown: employeeItem?.allowanceBreakdown || [],
+            grossPay: record.grossPay || employeeItem?.grossPay || 0,
+            
+            // Deductions
+            napsa: employeeItem?.napsa || 0,
+            nhima: employeeItem?.nhima || 0,
+            paye: employeeItem?.paye || 0,
+            deductions: employeeItem?.deductions || 0,
+            deductionBreakdown: employeeItem?.deductionBreakdown || [],
+            totalDeductions: record.totalDeductions || employeeItem?.totalDeductions || 0,
+            
+            // Net pay and metadata
+            netPay: record.netPay || employeeItem?.netSalary || 0,
+            status: record.status || 'paid',
+            payrollHistoryId: record._id,
+            employeeId: id
+          };
+        });
+
+        setPayslips(employeePayslips);
+      } catch (error) {
+        console.error("Error fetching payslips:", error);
+        setPayslipsError("Failed to load payslips. Please try again later.");
+      } finally {
+        setPayslipsLoading(false);
+      }
+    };
+
+    fetchPayslips();
+  }, [id, servicesLoaded]);
   // Handle loading and error states
   if (loading) {
     return (
