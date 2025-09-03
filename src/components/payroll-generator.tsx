@@ -11,7 +11,8 @@ import {
 } from "@/lib/db/services/service-factory"
 import type { PayrollHistory } from "@/lib/db/models/payroll-history.model"
 import { useNavigate } from "react-router-dom"
-import { CalendarIcon, CreditCard, Download, Search } from "lucide-react"
+import { CalendarIcon, CreditCard, Download, Search, FileUp } from "lucide-react"
+import ImportPayrollModal, { ImportedPayrollItem } from "./import-payroll-modal"
 
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
@@ -22,8 +23,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
-import { format } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
+import { format } from "date-fns"
 import { calculateNetSalary } from "@/lib/utils/payroll-calculations"
 
 export function PayrollGenerator() {
@@ -33,6 +34,9 @@ export function PayrollGenerator() {
   const [employeeData, setEmployeeData] = useState<Array<any>>([])
   const [payrollStructures, setPayrollStructures] = useState<Array<any>>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const [importedPayrollItems, setImportedPayrollItems] = useState<ImportedPayrollItem[]>([])
+  const [useImportedData, setUseImportedData] = useState(false)
   const navigate = useNavigate()
   const { toast } = useToast()
 
@@ -150,7 +154,25 @@ export function PayrollGenerator() {
   // Reset selected employees when employee data changes
   useEffect(() => {
     setSelectedEmployees([])
+    // Clear imported data when employee data changes
+    setImportedPayrollItems([])
+    setUseImportedData(false)
   }, [employeeData])
+  
+  // Handle imported payroll data
+  const handleImportComplete = (importedItems: ImportedPayrollItem[]) => {
+    setImportedPayrollItems(importedItems)
+    
+    // Auto-select employees that were imported
+    const importedEmployeeIds = importedItems.map(item => item.employeeId)
+    setSelectedEmployees(importedEmployeeIds)
+    setUseImportedData(true)
+    
+    toast({
+      title: "Import Successful",
+      description: `${importedItems.length} employee payroll records imported and selected.`,
+    })
+  }
 
   const handleSelectAll = () => {
     if (selectedEmployees.length === displayEmployees.length) {
@@ -175,74 +197,109 @@ export function PayrollGenerator() {
         selectedEmployees.includes(employee._id)
       )
 
-      // Create payroll items from selected employees with detailed breakdown
-      const payrollItems = selectedEmployeeData.map(employee => {
-        const basicSalary = employee.baseSalary || 0
-        const payrollStructure = employee.payrollStructure
-        
-        // Use the same calculation logic as the data loading
-        let housingAllowance = 0
-        let transportAllowance = 0
-        let napsa = 0
-        let nhima = 0
-        let paye = 0
-        let allowanceBreakdown = []
-        let deductionBreakdown = []
-        
-        if (payrollStructure) {
-          // Debug logging
-          console.log("Employee:", employee.firstName, employee.lastName)
-          console.log("Basic Salary:", basicSalary)
-          console.log("Payroll Structure:", payrollStructure)
-          console.log("Allowances:", payrollStructure.allowances)
-          console.log("Deductions:", payrollStructure.deductions)
+      // Create payroll items - either from imported data or calculated from employee data
+      let payrollItems;
+      
+      if (useImportedData && importedPayrollItems.length > 0) {
+        // Use the imported payroll data
+        console.log("Using imported payroll data for generation")
+        payrollItems = importedPayrollItems;
+      } else {
+        // Calculate payroll items from employee data
+        console.log("Calculating payroll items from employee data")
+        payrollItems = selectedEmployeeData.map(employee => {
+          const basicSalary = employee.baseSalary || 0
+          const payrollStructure = employee.payrollStructure
           
-          // Calculate using the same function as data loading
-          const salaryCalculation = calculateNetSalary(basicSalary, payrollStructure.allowances || [], payrollStructure.deductions || [])
-          console.log("Salary Calculation Result:", salaryCalculation)
+          // Use the same calculation logic as the data loading
+          let housingAllowance = 0
+          let transportAllowance = 0
+          let napsa = 0
+          let nhima = 0
+          let paye = 0
+          let allowanceBreakdown = []
+          let deductionBreakdown = []
           
-          // Extract individual allowances
-          if (payrollStructure.allowances) {
-            allowanceBreakdown = payrollStructure.allowances.map((allowance: any) => {
-              const amount = allowance.type === "percentage" 
-                ? (basicSalary * allowance.value) / 100 
-                : allowance.value || 0
-              
-              // Identify specific allowances by name
-              if (allowance.name.toLowerCase().includes('housing')) {
-                housingAllowance = amount
-              }
-              if (allowance.name.toLowerCase().includes('transport')) {
-                transportAllowance = amount
-              }
-              
-              return { ...allowance, value: amount }
-            })
+          if (payrollStructure) {
+            // Debug logging
+            console.log("Employee:", employee.firstName, employee.lastName)
+            console.log("Basic Salary:", basicSalary)
+            console.log("Payroll Structure:", payrollStructure)
+            console.log("Allowances:", payrollStructure.allowances)
+            console.log("Deductions:", payrollStructure.deductions)
+            
+            // Calculate using the same function as data loading
+            const salaryCalculation = calculateNetSalary(basicSalary, payrollStructure.allowances || [], payrollStructure.deductions || [])
+            console.log("Salary Calculation Result:", salaryCalculation)
+            
+            // Extract individual allowances
+            if (payrollStructure.allowances) {
+              allowanceBreakdown = payrollStructure.allowances.map((allowance: any) => {
+                const amount = allowance.type === "percentage" 
+                  ? (basicSalary * allowance.value) / 100 
+                  : allowance.value || 0
+                
+                // Identify specific allowances by name
+                if (allowance.name.toLowerCase().includes('housing')) {
+                  housingAllowance = amount
+                }
+                if (allowance.name.toLowerCase().includes('transport')) {
+                  transportAllowance = amount
+                }
+                
+                return { ...allowance, value: amount }
+              })
+            }
+            
+            // Extract individual deductions
+            if (payrollStructure.deductions) {
+              deductionBreakdown = payrollStructure.deductions.map((deduction: any) => {
+                const grossPay = salaryCalculation.grossSalary
+                const amount = deduction.type === "percentage" 
+                  ? (grossPay * deduction.value) / 100 
+                  : deduction.value || 0
+                
+                // Identify specific deductions by name
+                if (deduction.name.toLowerCase().includes('napsa')) {
+                  napsa = amount
+                }
+                if (deduction.name.toLowerCase().includes('nhima')) {
+                  nhima = amount
+                }
+                if (deduction.name.toLowerCase().includes('paye')) {
+                  paye = amount
+                }
+                
+                return { ...deduction, value: amount }
+              })
+            }
+            
+            return {
+              employeeId: employee._id,
+              employeeName: `${employee.firstName || ''} ${employee.lastName || ''}`.trim(),
+              accountNumber: employee.accountNumber || employee.account_number || '',
+              nrc: employee.nationalId || employee.national_id || '',
+              tpin: employee.taxNumber || employee.tax_number || '',
+              department: employee.department || 'General',
+              basicSalary: basicSalary,
+              housingAllowance: housingAllowance,
+              transportAllowance: transportAllowance,
+              grossPay: salaryCalculation.grossSalary,
+              napsa: napsa,
+              nhima: nhima,
+              paye: paye,
+              totalDeductions: salaryCalculation.totalDeductions,
+              netSalary: salaryCalculation.netSalary,
+              payrollStructureId: employee.payrollStructureId || '',
+              // Keep detailed breakdown for expandable view
+              allowanceBreakdown: allowanceBreakdown,
+              deductionBreakdown: deductionBreakdown,
+              allowances: salaryCalculation.totalAllowances,
+              deductions: salaryCalculation.totalDeductions
+            }
           }
           
-          // Extract individual deductions
-          if (payrollStructure.deductions) {
-            deductionBreakdown = payrollStructure.deductions.map((deduction: any) => {
-              const grossPay = salaryCalculation.grossSalary
-              const amount = deduction.type === "percentage" 
-                ? (grossPay * deduction.value) / 100 
-                : deduction.value || 0
-              
-              // Identify specific deductions by name
-              if (deduction.name.toLowerCase().includes('napsa')) {
-                napsa = amount
-              }
-              if (deduction.name.toLowerCase().includes('nhima')) {
-                nhima = amount
-              }
-              if (deduction.name.toLowerCase().includes('paye')) {
-                paye = amount
-              }
-              
-              return { ...deduction, value: amount }
-            })
-          }
-          
+          // Fallback for employees without payroll structure
           return {
             employeeId: employee._id,
             employeeName: `${employee.firstName || ''} ${employee.lastName || ''}`.trim(),
@@ -251,47 +308,22 @@ export function PayrollGenerator() {
             tpin: employee.taxNumber || employee.tax_number || '',
             department: employee.department || 'General',
             basicSalary: basicSalary,
-            housingAllowance: housingAllowance,
-            transportAllowance: transportAllowance,
-            grossPay: salaryCalculation.grossSalary,
-            napsa: napsa,
-            nhima: nhima,
-            paye: paye,
-            totalDeductions: salaryCalculation.totalDeductions,
-            netSalary: salaryCalculation.netSalary,
+            housingAllowance: 0,
+            transportAllowance: 0,
+            grossPay: basicSalary,
+            napsa: 0,
+            nhima: 0,
+            paye: 0,
+            totalDeductions: 0,
+            netSalary: basicSalary,
             payrollStructureId: employee.payrollStructureId || '',
-            // Keep detailed breakdown for expandable view
-            allowanceBreakdown: allowanceBreakdown,
-            deductionBreakdown: deductionBreakdown,
-            allowances: salaryCalculation.totalAllowances,
-            deductions: salaryCalculation.totalDeductions
+            allowanceBreakdown: [],
+            deductionBreakdown: [],
+            allowances: 0,
+            deductions: 0
           }
-        }
-        
-        // Fallback for employees without payroll structure
-        return {
-          employeeId: employee._id,
-          employeeName: `${employee.firstName || ''} ${employee.lastName || ''}`.trim(),
-          accountNumber: employee.accountNumber || employee.account_number || '',
-          nrc: employee.nationalId || employee.national_id || '',
-          tpin: employee.taxNumber || employee.tax_number || '',
-          department: employee.department || 'General',
-          basicSalary: basicSalary,
-          housingAllowance: 0,
-          transportAllowance: 0,
-          grossPay: basicSalary,
-          napsa: 0,
-          nhima: 0,
-          paye: 0,
-          totalDeductions: 0,
-          netSalary: basicSalary,
-          payrollStructureId: employee.payrollStructureId || '',
-          allowanceBreakdown: [],
-          deductionBreakdown: [],
-          allowances: 0,
-          deductions: 0
-        }
-      })
+        })
+      }
 
       // Calculate total amount as the sum of all net salaries
       const totalAmount = payrollItems.reduce((sum, item) => sum + item.netSalary, 0)
@@ -373,24 +405,6 @@ export function PayrollGenerator() {
                   </PopoverContent>
                 </Popover>
               </div>
-            </div>
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="department-filter">Department</Label>
-                <Select defaultValue="all">
-                  <SelectTrigger id="department-filter">
-                    <SelectValue placeholder="Filter by department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Departments</SelectItem>
-                    <SelectItem value="engineering">Engineering</SelectItem>
-                    <SelectItem value="marketing">Marketing</SelectItem>
-                    <SelectItem value="finance">Finance</SelectItem>
-                    <SelectItem value="hr">Human Resources</SelectItem>
-                    <SelectItem value="product">Product</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="status-filter">Status</Label>
                 <Select defaultValue="active">
@@ -462,17 +476,34 @@ export function PayrollGenerator() {
             <div>
               <p className="text-sm text-muted-foreground">
                 {selectedEmployees.length} of {displayEmployees.length} employees selected
+                {useImportedData && importedPayrollItems.length > 0 && (
+                  <span className="ml-2 text-primary font-medium">
+                    (Using imported payroll data)
+                  </span>
+                )}
               </p>
             </div>
             <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setImportModalOpen(true)}>
+                <FileUp className="mr-2 h-4 w-4" />
+                Import Payroll Data
+              </Button>
               <Button variant="outline" asChild>
-                <Link href="/payroll">Cancel</Link>
+                <Link to="/payroll">Cancel</Link>
               </Button>
               <Button onClick={() => setStep(2)} disabled={selectedEmployees.length === 0}>
                 Next: Review
               </Button>
             </div>
           </div>
+          
+          {/* Import Payroll Modal */}
+          <ImportPayrollModal
+            open={importModalOpen}
+            onOpenChange={setImportModalOpen}
+            onImportComplete={handleImportComplete}
+            employeeData={employeeData}
+          />
         </>
       )}
       {step === 2 && (
